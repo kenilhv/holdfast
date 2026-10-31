@@ -68,8 +68,10 @@ export async function searchWeb(query: string, limit = 3): Promise<{ url: string
 
 export async function domainAge(domain: string): Promise<DomainAge> {
   try {
-    const res = await fetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
-      headers: { Accept: "application/rdap+json" },
+    const tld = domain.split(".").at(-1);
+    const registry = tld === "com" || tld === "net" ? `https://rdap.verisign.com/${tld}/v1` : "https://rdap.org";
+    const res = await fetch(`${registry}/domain/${encodeURIComponent(domain)}`, {
+      headers: { Accept: "application/rdap+json", "User-Agent": "Holdfast/0.1" },
       signal: AbortSignal.timeout(8_000),
     });
     if (res.status === 404) return { status: "missing" };
