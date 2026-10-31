@@ -58,6 +58,7 @@ textarea { width: 100%; height: 130px; resize: vertical; background: var(--sheet
 .go:active { transform: scale(.98); }
 .past { display: flex; gap: 8px; align-items: center; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 7px 2px; text-align: left; }
 .past .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.past .who small { display: block; color: var(--soft); font-size: 12px; font-weight: 400; }
 .past.sel .who { font-weight: 600; }
 .chip { font: 500 10.5px/1 var(--data); padding: 3px 5px; color: var(--sheet); flex: none; }
 .chip.PASS { background: var(--pass); } .chip.HOLD { background: var(--hold); } .chip.BLOCK { background: var(--block); } .chip.WAIT { background: var(--soft); }
@@ -380,7 +381,8 @@ function renderPast() {
   $("past").innerHTML = list.map((c) => {
     const failed = c.status === "failed";
     const v = failed ? "BLOCK" : c.verdict || "WAIT";
-    return `<button class="past ${c.id === selected ? "sel" : ""}" data-id="${esc(c.id)}"><span class="chip ${v}">${failed ? "NO PAY" : c.verdict || "..."}</span><span class="who">${esc(c.vendor?.name || c.bill?.vendorName || c.preview)}</span></button>`;
+    const when = new Date(c.receivedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return `<button class="past ${c.id === selected ? "sel" : ""}" data-id="${esc(c.id)}"><span class="chip ${v}">${failed ? "NO PAY" : c.verdict || "..."}</span><span class="who">${esc(c.vendor?.name || c.bill?.vendorName || c.preview)}<small>${when}, ${c.source === "iMessage" ? "texted in" : "from the board"}</small></span></button>`;
   }).join("");
 }
 
@@ -473,7 +475,7 @@ function renderHead(c) {
   const failed = c.status === "failed";
   const verdict = failed ? "NO PAY" : c.verdict || "Checking";
   const name = c.vendor?.name || c.bill?.vendorName || (c.bill ? "Unknown vendor" : "Reading the bill");
-  const sub = [c.bill?.invoiceNumber && `Invoice ${c.bill.invoiceNumber}`, c.vendor && `Number on file ${c.vendor.phone}`, c.source === "iMessage" && "Texted in"].filter(Boolean).map((s) => `<span>${esc(s)}</span>`).join("");
+  const sub = [c.bill?.invoiceNumber && `Invoice ${c.bill.invoiceNumber}`, c.vendor && `Number on file ${c.vendor.phone}`, `${c.source === "iMessage" ? "Texted in" : "Received"} at ${clock(c.receivedAt)}`].filter(Boolean).map((s) => `<span>${esc(s)}</span>`).join("");
   const pct = (n) => `${(Math.min(n, SCALE) / SCALE) * 100}%`;
   const railKey = `${c.id}:${c.verdict ?? ""}`;
   const grow = c.verdict && shown.rail !== railKey && shown.rail.startsWith(`${c.id}:`);
@@ -611,7 +613,7 @@ function renderPhone(c) {
   shown.thread = key;
   shown.threadCount = chat.length;
   const thinking = k && chat.at(-1)?.from === "vendor" && ["awaiting_vendor", "negotiating", "examining"].includes(k.phase);
-  const body = chat.map((m, i) => `<div class="msg ${m.from === "agent" ? "them" : "me"} ${m.file ? "file" : ""} ${i >= seen ? "new" : ""}">${m.file ? `<span aria-hidden="true">PDF</span> ${esc(m.file)}` : esc(m.text)}</div>`).join("");
+  const body = chat.map((m, i) => `<div class="msg ${m.from === "agent" ? "them" : "me"} ${m.file ? "file" : ""} ${i >= seen ? "new" : ""}" title="${clock(m.at)}">${m.file ? `<span aria-hidden="true">PDF</span> ${esc(m.file)}` : esc(m.text)}</div>`).join("");
   $("thread").innerHTML = body + (thinking ? `<div class="msg them new dots" aria-label="Holdfast is reading"><i></i><i></i><i></i></div>` : "") || `<p class="nothing">${c?.verdict === "PASS" ? "This bill passed, so the vendor isn't contacted." : "When a bill is flagged, the agent texts the vendor here, on the number we already trust."}</p>`;
   $("thread").scrollTop = $("thread").scrollHeight;
   $("line").textContent = k?.channel === "iMessage" ? "Vendor's phone, live" : "Vendor's phone, stand-in";
