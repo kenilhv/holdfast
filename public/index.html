@@ -506,7 +506,7 @@ function renderActions(c) {
   const rejectFirst = c.verdict === "BLOCK" || k?.recommendation?.startsWith("Reject");
   const reject = `<button class="act ${rejectFirst ? "danger" : ""}" data-act="reject">Reject</button>`;
   const yes = c.verdict === "BLOCK" ? `<button class="act" data-act="override">Override</button>` : `<button class="act ${rejectFirst ? "" : "main"}" data-act="approve">Approve</button>`;
-  const haggle = k?.verified && !k.offer && k.phase === "awaiting_human" ? `<button class="act" data-negotiate="1">Ask for a discount</button>` : "";
+  const haggle = k?.verified && c.verdict !== "BLOCK" && !k.offer && k.phase === "awaiting_human" ? `<button class="act" data-negotiate="1">Ask for a discount</button>` : "";
   box.innerHTML = (rejectFirst ? reject + yes + haggle : yes + reject + haggle) + fake;
 }
 
@@ -514,11 +514,12 @@ function renderReport(c) {
   const k = c.crew;
   const docs = (k?.documents ?? []).map((d) => `${esc(d.name[0].toUpperCase() + d.name.slice(1))}: ${esc(d.verdict)}. ${esc(d.notes.join(" "))}`);
   const offer = k?.offer && (k.offer.accepted ? `${k.offer.discountPct}% off, saving ${money(k.offer.savings)}. Nothing is agreed until you co-sign.` : "No discount offered.");
-  const key = JSON.stringify([k?.recommendation, docs, offer]);
+  const standing = c.decision ? "" : c.verdict === "BLOCK" ? "Still blocked. What the vendor says doesn't change the findings on this bill. Only you can override it." : c.verdict === "HOLD" ? "Still on hold until you decide." : "";
+  const key = JSON.stringify([k?.recommendation, docs, offer, standing]);
   if ($("report").dataset.key === key) return;
   $("report").dataset.key = key;
   $("report").innerHTML = k?.recommendation
-    ? `<div class="report"><b>Crew report</b><p>${esc(k.recommendation)}</p>${docs.map((d) => `<small>${d}</small>`).join("")}${offer ? `<small>${esc(offer)}</small>` : ""}</div>`
+    ? `<div class="report"><b>Crew report</b><p>${esc(k.recommendation)}</p>${docs.map((d) => `<small>${d}</small>`).join("")}${offer ? `<small>${esc(offer)}</small>` : ""}${standing ? `<small>${esc(standing)}</small>` : ""}</div>`
     : "";
 }
 

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { compareDocument } from "../src/agents/examiner.ts";
 import { askFor, invoiceLabel } from "../src/agents/liaison.ts";
 import { opening, savings } from "../src/agents/negotiator.ts";
-import { isVerified, recommend } from "../src/crew.ts";
+import { canNegotiate, isVerified, recommend } from "../src/crew.ts";
 import type { Case, CrewState } from "../src/pipeline.ts";
 import { evaluate, type BillFields, type Vendor } from "../src/rules.ts";
 
@@ -64,6 +64,12 @@ test("a denial and a bad document both recommend rejecting", () => {
 
 test("an unknown vendor has nobody safe to contact", () => {
   assert.match(recommend(crew(), false), /no trusted contact/);
+});
+
+test("a blocked bill never gets a discount offer, even with a verified vendor", () => {
+  assert.equal(canNegotiate({ verdict: "BLOCK", crew: crew({ verified: true }) }), false);
+  assert.equal(canNegotiate({ verdict: "HOLD", crew: crew({ verified: true }) }), true);
+  assert.equal(canNegotiate({ verdict: "HOLD", crew: crew({ verified: false }) }), false);
 });
 
 test("a yes does not meet a request for a document", () => {

@@ -27,6 +27,9 @@ export function isVerified(k: CrewState): boolean {
   return doc ? doc.verdict === "consistent" : k.outcome === "confirmed" && k.needs !== "document";
 }
 
+// A discount is only for a real bill: the vendor is proven, and nothing still blocks the bill.
+export const canNegotiate = (c: Pick<Case, "verdict" | "decision" | "crew">) => Boolean(c.crew?.verified) && c.verdict !== "BLOCK" && !c.decision && !c.crew?.offer;
+
 export function recommend(k: CrewState, hasContact = true): string {
   const doc = k.documents.at(-1);
   const line = k.channel === "iMessage" ? "the trusted line" : "the board stand-in";
@@ -80,7 +83,7 @@ export function createCrew(d: { engine: Engine; vendors: Vendor[]; vendorLine: V
     k.phase = "awaiting_human";
     d.engine.step(c, "Report to a person", k.recommendation, k.verified ? "ok" : "warn");
     const next = c.verdict === "BLOCK" ? "Reply REJECT, or OVERRIDE." : "Reply APPROVE or REJECT.";
-    const extra = k.verified ? ` Reply NEGOTIATE and I will ask for ${DISCOUNT_PCT}% off for early payment.` : "";
+    const extra = canNegotiate(c) ? ` Reply NEGOTIATE and I will ask for ${DISCOUNT_PCT}% off for early payment.` : "";
     const link = d.baseUrl ? `\nRecord: ${d.baseUrl}/#${c.id}` : "";
     await tellPerson(c, `Update on ${c.vendor?.name ?? c.bill?.vendorName ?? "this vendor"}: ${k.recommendation} ${next}${extra}${link}`);
   }
@@ -152,11 +155,20 @@ export function createCrew(d: { engine: Engine; vendors: Vendor[]; vendorLine: V
       },
     });
     if (!finished) return;
-    // Saying yes is not the document we asked for, so keep the line open and ask again.
-    if (k.outcome === "confirmed" && k.needs === "document" && !k.documents.length) {
-      k.outcome = undefined;
-      await say(c, "Thanks. We still need the bank letter or voided check before anything can move forward.");
-      return;
+    if (k.outcome === "confirmed" && !k.documents.length) {
+      // Saying yes is not the document we asked for, so keep the line open and ask again.
+      if (k.needs === "document") {
+        k.outcome = undefined;
+        await say(c, "Thanks. We still need the bank letter or voided check before anything can move forward.");
+        return;
+      }
+      // Sending the bill and owning the new account are two claims. The account still needs its own proof.
+      if (c.signals.some((s) => s.id === "bank_changed")) {
+        k.outcome = undefined;
+        k.needs = "document";
+        await say(c, "Thanks for confirming. This invoice also has new bank details, so please send a bank letter on your letterhead or a voided check for the account you want paid.");
+        return;
+      }
     }
     await report(c);
   }
@@ -185,6 +197,7 @@ export function createCrew(d: { engine: Engine; vendors: Vendor[]; vendorLine: V
     const k = c.crew;
     if (!k?.verified) throw new Error("only a verified vendor can be asked for a discount");
     if (c.decision) throw new Error("this bill is already decided");
+    if (c.verdict === "BLOCK") throw new Error("a blocked bill gets no discount offer");
     if (k.offer || k.phase === "negotiating") throw new Error("this vendor has already been asked");
     k.phase = "negotiating";
     return inOrder(c, async () => {
