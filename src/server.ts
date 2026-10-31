@@ -170,15 +170,21 @@ const server = createServer(async (req, res) => {
       return send(res, 202, { accepted: true });
     }
 
-    const m = /^\/api\/cases\/(c_[0-9a-f]+)(?:\/(decide|forge|verify|vendor|negotiate))?$/.exec(path);
+    const m = /^\/api\/cases\/(c_[0-9a-f]+)(?:\/(decide|forge|verify|vendor|negotiate|ask))?$/.exec(path);
     if (m) {
       const [, id, part] = m;
       if (!engine.get(id)) throw new HttpError(404, "no such case");
+      if (req.method === "POST" && part === "ask") {
+        const { question } = await readJson(req);
+        if (typeof question !== "string" || !question.trim()) throw new HttpError(400, "ask a question");
+        spendCheck(clientOf(req), true);
+        return send(res, 200, { answer: await crew!.ask(engine.get(id)!, question) });
+      }
       if (req.method === "POST" && part === "vendor") {
         // The stand-in for a vendor's phone. It is closed when a real phone is set.
         if (process.env.DEMO_VENDOR_PHONE && chat?.on) throw new HttpError(409, "the vendor is on a real phone for this demo");
         const { text, file } = await readJson(req, FILE_BODY_LIMIT);
-        spendCheck(clientOf(req));
+        spendCheck(clientOf(req), true);
         const message = file ? { file: { name: String(file.name).slice(0, 80), mediaType: String(file.mediaType), base64: String(file.base64) } } : { text: String(text ?? "").slice(0, 2000) };
         if (!message.file && !message.text) throw new HttpError(400, "send text or a file");
         if (message.file && !["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"].includes(message.file.mediaType)) throw new HttpError(400, "send a PDF or an image");

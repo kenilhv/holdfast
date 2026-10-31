@@ -80,10 +80,12 @@ textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); ou
 .bubble.agent { background: var(--ink); color: var(--paper); margin-left: auto; }
 .bubble.vendor { background: var(--card); border: 1px solid var(--line); }
 .bubble small { display: block; opacity: .7; font: 10.5px var(--mono); margin-bottom: 2px; }
-#vendorForm { margin-top: 10px; }
-#vendorForm .row { display: flex; gap: 8px; }
-#vendorText { flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line); padding: 8px 10px; font: inherit; color: inherit; }
-#vendorForm button { background: none; border: 1px solid var(--ink); padding: 8px 12px; font-weight: 500; cursor: pointer; }
+#vendorBox { margin-bottom: 22px; }
+#vendorForm, #askForm { margin-top: 10px; }
+.row { display: flex; gap: 8px; }
+.row input { flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line); padding: 8px 10px; font: inherit; color: inherit; }
+.row button, #vendorForm .acts button { background: none; border: 1px solid var(--ink); padding: 8px 12px; font-weight: 500; cursor: pointer; }
+#askAnswer:not(:empty) { margin-top: 8px; }
 .rec { background: var(--card); border-left: 3px solid var(--ink); padding: 9px 12px; margin-top: 8px; }
 .rec b { display: block; font-weight: 600; }
 @media (max-width: 1100px) { main { grid-template-columns: 1fr; } section { border-right: 0; border-bottom: 1px solid var(--line); padding: 18px 16px; } header { padding: 16px; } .lights { margin-left: 0; } }
@@ -108,8 +110,6 @@ textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); ou
     <div id="past"><p class="note">Nothing yet.</p></div>
   </section>
   <section aria-live="polite">
-    <h2>Live check</h2>
-    <div id="live"><p class="empty">Pick a bill to watch the check run.</p></div>
     <div id="vendorBox" hidden>
       <h2 id="vendorTitle">Vendor conversation</h2>
       <div id="chat"></div>
@@ -124,7 +124,16 @@ textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); ou
           <button type="button" data-letter="bank-letter-wrong.pdf">Send wrong letter</button>
         </div>
       </form>
+      <form id="askForm">
+        <div class="row">
+          <input id="askText" aria-label="Ask the Controller about this bill" placeholder="Ask about this bill" autocomplete="off">
+          <button>Ask</button>
+        </div>
+        <p class="note" id="askAnswer"></p>
+      </form>
     </div>
+    <h2>Live check</h2>
+    <div id="live"><p class="empty">Pick a bill to watch the check run.</p></div>
   </section>
   <section>
     <h2>Signed record</h2>
@@ -327,6 +336,19 @@ $("vendorForm").onsubmit = async (e) => {
   if (!text) return;
   $("vendorText").value = "";
   try { await api(`/api/cases/${selected}/vendor`, { text }); } catch (err) { show(err); }
+};
+$("askForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const question = $("askText").value.trim();
+  if (!question) return;
+  $("askAnswer").textContent = "Reading the record...";
+  try {
+    const { answer } = await api(`/api/cases/${selected}/ask`, { question });
+    $("askAnswer").textContent = answer;
+  } catch (err) {
+    $("askAnswer").textContent = "";
+    show(err);
+  }
 };
 $("vendorForm").onclick = async (e) => {
   const name = e.target.dataset.letter;
