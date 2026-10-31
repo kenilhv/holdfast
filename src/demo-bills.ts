@@ -52,14 +52,14 @@ Graybar Accounts`,
     id: "ghost",
     title: "Ghost vendor",
     note: "Nobody has heard of this company",
-    text: `From: Billing <billing@bayline-sitesvcs.com>
+    text: `From: Billing <billing@northgate-sitesvcs.com>
 To: ap@baylineconstruction.example
 Subject: Invoice 1007 for site services
 
 Invoice 1007 for site cleanup, $9,850.00, due on receipt.
 Pay by ACH to the account ending 7712.
 
-Bayline Site Services LLC
+Northgate Site Services LLC
 Call 628-555-0199`,
   },
 ];

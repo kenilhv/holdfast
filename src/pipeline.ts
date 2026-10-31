@@ -132,7 +132,7 @@ export function createEngine(d: {
     }
     const page = await fetchPage(url);
     c.evidence.push({ url: page.url, fetchedAt: page.fetchedAt, contentHash: page.contentHash });
-    step(c, "Fetched page", `${page.url} (${page.phones.length} phone numbers found)`, "ok");
+    step(c, vendor ? "Fetched official page" : "Fetched top search result", `${page.url} (${page.phones.length} phone numbers found)`, vendor ? "ok" : "info");
     return [page];
   }
 
@@ -180,7 +180,7 @@ export function createEngine(d: {
       if (age?.status === "missing") step(c, "Domain age", `${from} has no registration record.`, "bad");
       if (age?.status === "error") step(c, "Domain age", `Lookup failed: ${age.message}.`, "warn");
 
-      const claims = await readPages(bill, pages).catch((e): Claim[] => {
+      const claims = await readPages(bill, pages, Boolean(vendor)).catch((e): Claim[] => {
         step(c, "Page reading failed", (e as Error).message, "warn");
         return [];
       });

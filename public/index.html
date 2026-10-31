@@ -146,7 +146,8 @@ function renderLive(c) {
 
 function evidenceHtml(c) {
   const pages = c.evidence.map((e) => `<div class="ev"><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.url)}</a><br>sha256 ${esc(e.contentHash.slice(0, 24))}, fetched ${clock(e.fetchedAt)}</div>`).join("");
-  const claims = c.claims.map((k) => `<div class="ev">${esc(k.text)}<q>"${esc(k.quote)}"</q></div>`).join("");
+  const plain = (q) => q.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+  const claims = c.claims.map((k) => `<div class="ev">${esc(k.text)}<q>"${esc(plain(k.quote))}"</q></div>`).join("");
   return pages || claims ? `<h2>Evidence</h2>${pages}${claims}` : "";
 }
 
