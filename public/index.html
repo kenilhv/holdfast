@@ -194,7 +194,7 @@ dialog h3 { margin: 0 0 4px; font: 700 20px var(--display); }
 dialog p { margin: 0 0 10px; color: var(--soft); font-size: 14px; }
 dialog input { width: 100%; border: 1px solid var(--rule); padding: 8px 10px; background: #fff; font-family: var(--data); }
 dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 12px 0 0; padding: 0; }
-#toasts { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 20; width: min(440px, calc(100vw - 32px)); pointer-events: none; }
+#toasts { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 20; width: min(440px, calc(100vw - 32px)); pointer-events: none; }
 .toast { background: var(--ink); color: var(--sheet); padding: 10px 14px; font-weight: 500; transition: opacity 180ms ease, transform 180ms var(--out); }
 .toast.bad { background: var(--block); }
 .toast.leaving { opacity: 0; transform: translateY(6px); }
@@ -580,15 +580,15 @@ function crewRows(c) {
   const liaisonEnd = last(c, "Liaison finished");
   const waitingVendor = k?.phase === "awaiting_vendor";
   const liaisonDone = liaisonEnd || last(c, "Examiner") || k?.phase === "awaiting_human" && !noContact && k.chat.length;
-  rows.push({ name: "Liaison", kind: "Claude", state: noContact ? "off" : waitingVendor ? "wait" : liaisonDone ? "done" : passed ? "off" : "", text: noContact ? "No trusted contact on file" : waitingVendor ? "Waiting on the vendor" : liaisonEnd ? liaisonEnd.detail.split(": ").slice(1).join(": ") : liaisonDone ? "Got the vendor's reply" : none || "Contacts the vendor on the trusted line" });
+  rows.push({ name: "Liaison", kind: "Claude", state: noContact ? "off" : waitingVendor ? "wait" : liaisonDone ? "done" : passed ? "off" : "", text: noContact ? "No trusted contact on file" : waitingVendor ? "Waiting on the vendor" : k?.documents.length ? "The vendor sent a document" : liaisonEnd ? liaisonEnd.detail.split(": ").slice(1).join(": ") : liaisonDone ? "Got the vendor's reply" : none || "Contacts the vendor on the trusted line" });
 
   const examNow = last(c, "Examiner"), examEnd = last(c, "Examiner finished"), doc = k?.documents.at(-1);
   rows.push({ name: "Examiner", kind: "Claude", state: examEnd ? (doc?.verdict === "consistent" ? "done" : "bad") : k?.phase === "examining" ? "run" : passed ? "off" : "off", text: examEnd ? `${doc?.name[0].toUpperCase()}${doc?.name.slice(1)}: ${doc?.verdict}` : k?.phase === "examining" ? `Reading ${examNow?.detail.replace("Reading ", "").replace(/\.$/, "")}` : none || "Reads what the vendor sends" });
 
   const negEnd = last(c, "Negotiator finished");
-  rows.push({ name: "Negotiator", kind: "Claude", state: negEnd ? "done" : k?.phase === "negotiating" ? "wait" : "off", text: negEnd ? negEnd.detail : k?.phase === "negotiating" ? "Waiting on the vendor's answer" : none || "Only runs if you ask" });
+  rows.push({ name: "Negotiator", kind: "Claude", state: negEnd ? "done" : k?.phase === "negotiating" ? "wait" : "off", text: negEnd ? (k?.offer?.accepted ? `Offered ${k.offer.discountPct}% off` : "No discount") : k?.phase === "negotiating" ? "Waiting on the vendor's answer" : none || "Only runs if you ask" });
 
-  rows.push({ name: "You", kind: "Person", state: c.decision ? "done" : k?.phase === "awaiting_human" ? "wait" : passed ? "off" : "", text: c.decision ? `${c.decision.action} signed` : k?.phase === "awaiting_human" ? "Your call" : none || "Nothing moves without you" });
+  rows.push({ name: "You", kind: "Person", state: c.decision ? "done" : k?.phase === "awaiting_human" ? "wait" : passed ? "off" : "", text: c.decision ? `${{ approve: "Approved", reject: "Rejected", override: "Overridden" }[c.decision.action]} and signed` : k?.phase === "awaiting_human" ? "Your call" : none || "Nothing moves without you" });
   return rows;
 }
 
