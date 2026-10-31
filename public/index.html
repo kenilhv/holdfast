@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Holdfast</title>
+<title>CoSign</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,700;0,6..96,900;1,6..96,500&family=DM+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -230,7 +230,7 @@ dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 12px 0
 </head>
 <body>
 <header class="bar">
-  <span class="mark-word">Holdfast</span>
+  <span class="mark-word">CoSign</span>
   <span class="promise">No vendor gets paid until it proves who it is.</span>
   <div class="lights" id="lights"></div>
 </header>
@@ -324,7 +324,7 @@ let followNext = false;
 // What has already been shown, so only what is new animates.
 const shown = { sheet: "", notes: "", rail: "", thread: "" , threadCount: 0 };
 
-$("micro").textContent = "HOLDFAST NO VENDOR GETS PAID UNTIL IT PROVES WHO IT IS ".repeat(24);
+$("micro").textContent = "COSIGN NO VENDOR GETS PAID UNTIL IT PROVES WHO IT IS ".repeat(24);
 
 function toast(text, tone = "") {
   const t = document.createElement("div");
@@ -615,7 +615,7 @@ function renderPhone(c) {
   shown.threadCount = chat.length;
   const thinking = k && chat.at(-1)?.from === "vendor" && ["awaiting_vendor", "negotiating", "examining"].includes(k.phase);
   const body = chat.map((m, i) => `<div class="msg ${m.from === "agent" ? "them" : "me"} ${m.file ? "file" : ""} ${i >= seen ? "new" : ""}" title="${clock(m.at)}">${m.file ? `<span aria-hidden="true">PDF</span> ${esc(m.file)}` : esc(m.text)}</div>`).join("");
-  $("thread").innerHTML = body + (thinking ? `<div class="msg them new dots" aria-label="Holdfast is reading"><i></i><i></i><i></i></div>` : "") || `<p class="nothing">${c?.verdict === "PASS" ? "This bill passed, so the vendor isn't contacted." : "When a bill is flagged, the agent texts the vendor here, on the number we already trust."}</p>`;
+  $("thread").innerHTML = body + (thinking ? `<div class="msg them new dots" aria-label="CoSign is reading"><i></i><i></i><i></i></div>` : "") || `<p class="nothing">${c?.verdict === "PASS" ? "This bill passed, so the vendor isn't contacted." : "When a bill is flagged, the agent texts the vendor here, on the number we already trust."}</p>`;
   $("thread").scrollTop = $("thread").scrollHeight;
   $("line").textContent = k?.channel === "iMessage" ? "Vendor's phone, live" : "Vendor's phone, stand-in";
   $("compose").hidden = !(k && ["awaiting_vendor", "negotiating"].includes(k.phase) && k.channel === "the board");

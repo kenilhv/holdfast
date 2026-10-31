@@ -1,4 +1,4 @@
-# Holdfast
+# CoSign
 
 Holds a vendor payment until the payee proves who it is. Built at Night Hack, October 30, 2026.
 

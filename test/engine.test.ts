@@ -41,7 +41,7 @@ test("signatures verify, and fail after any change", () => {
 });
 
 test("the hash chain finds an edit made to the file on disk", () => {
-  const path = join(tmpdir(), `holdfast-test-${process.pid}-${Date.now()}.jsonl`);
+  const path = join(tmpdir(), `cosign-test-${process.pid}-${Date.now()}.jsonl`);
   const log = createEventLog(path);
   log.append("a", { data: { verdict: "BLOCK" } });
   log.append("b", { data: 2 });
@@ -187,7 +187,7 @@ test("a failure inside the work is not run twice", async () => {
 });
 
 test("forging twice records one refusal", () => {
-  const events = createEventLog(join(tmpdir(), `holdfast-forge-${process.pid}-${Date.now()}.jsonl`));
+  const events = createEventLog(join(tmpdir(), `cosign-forge-${process.pid}-${Date.now()}.jsonl`));
   const engine = createEngine({ events, signer: createSigner(), vendors: [] });
   const sent: Case[] = [];
   engine.subscribe((c) => sent.push(c));
@@ -212,7 +212,7 @@ test("the text never tells someone to call a number from the email", () => {
     bill: { ...fields, phone: "415-555-0142", amount: "18240.00" },
     id: "c_1",
   } as unknown as Case;
-  const text = summary(c, "https://holdfast.test");
+  const text = summary(c, "https://cosign.test");
   assert.match(text, /1-800-474-3794/);
   assert.doesNotMatch(text, /415-555-0142/);
   assert.match(text, /APPROVE or REJECT/);

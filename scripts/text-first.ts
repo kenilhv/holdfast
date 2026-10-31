@@ -14,7 +14,7 @@ const app: any = await Spectrum({
 });
 const im = imessage(app);
 const space = await im.space.create(await im.user(phone));
-await space.send("Holdfast test: the agent started this conversation.");
+await space.send("CoSign test: the agent started this conversation.");
 console.log(`Sent. Space ${space.id}`);
 await app.stop();
 process.exit(0);

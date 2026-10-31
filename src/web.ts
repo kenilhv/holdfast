@@ -71,7 +71,7 @@ export async function domainAge(domain: string): Promise<DomainAge> {
     const tld = domain.split(".").at(-1);
     const registry = tld === "com" || tld === "net" ? `https://rdap.verisign.com/${tld}/v1` : "https://rdap.org";
     const res = await fetch(`${registry}/domain/${encodeURIComponent(domain)}`, {
-      headers: { Accept: "application/rdap+json", "User-Agent": "Holdfast/0.1" },
+      headers: { Accept: "application/rdap+json", "User-Agent": "CoSign/0.1" },
       signal: AbortSignal.timeout(8_000),
     });
     // Only the .com and .net registry is authoritative here. The public proxy also says 404 for real domains on other endings.

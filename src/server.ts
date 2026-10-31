@@ -1,4 +1,4 @@
-// Holdfast: one service that holds a vendor payment until the payee proves who it is.
+// CoSign: one service that holds a vendor payment until the payee proves who it is.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,7 +27,7 @@ process.on("unhandledRejection", (e) => console.error("unhandled rejection:", e)
 const port = Number(process.env.PORT ?? 8790);
 const baseUrl = (process.env.RENDER_EXTERNAL_URL ?? process.env.PUBLIC_URL ?? "").replace(/\/$/, "");
 const vendors: Vendor[] = JSON.parse(readFileSync(`${root}data/vendors.json`, "utf8"));
-const events = createEventLog(join(process.env.DATA_DIR ?? join(tmpdir(), "holdfast"), "events.jsonl"));
+const events = createEventLog(join(process.env.DATA_DIR ?? join(tmpdir(), "cosign"), "events.jsonl"));
 const signer = createSigner(process.env.SIGNING_KEY_PEM || undefined);
 
 let chat: Awaited<ReturnType<typeof startImessage>> | undefined;
@@ -230,7 +230,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, () => {
-  console.log(`Holdfast on http://localhost:${port}`);
+  console.log(`CoSign on http://localhost:${port}`);
   // Fetch the vendor pages up front, so the first demo is fast and a Firecrawl failure shows early.
   if (process.env.FIRECRAWL_API_KEY) {
     for (const v of vendors) fetchPage(v.contactUrl).catch((e: Error) => console.error(`warm ${v.id}: ${e.message}`));
