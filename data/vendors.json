@@ -1,0 +1,47 @@
+[
+  {
+    "id": "grainger",
+    "name": "Grainger",
+    "aliases": ["W.W. Grainger", "WW Grainger"],
+    "domains": ["grainger.com"],
+    "phone": "1-800-472-4643",
+    "bankLast4": "8841",
+    "contactUrl": "https://www.grainger.com/content/general-contact-us"
+  },
+  {
+    "id": "graybar",
+    "name": "Graybar",
+    "aliases": ["Graybar Electric"],
+    "domains": ["graybar.com"],
+    "phone": "1-855-347-2839",
+    "bankLast4": "2206",
+    "contactUrl": "https://www.graybar.com/contact-us"
+  },
+  {
+    "id": "sherwin",
+    "name": "Sherwin-Williams",
+    "aliases": ["Sherwin Williams"],
+    "domains": ["sherwin-williams.com"],
+    "phone": "1-800-474-3794",
+    "bankLast4": "5173",
+    "contactUrl": "https://www.sherwin-williams.com/contact-us"
+  },
+  {
+    "id": "ferguson",
+    "name": "Ferguson",
+    "aliases": ["Ferguson Enterprises"],
+    "domains": ["ferguson.com"],
+    "phone": "800-721-2590",
+    "bankLast4": "6620",
+    "contactUrl": "https://www.ferguson.com/content/website-info/contact-us"
+  },
+  {
+    "id": "mcmaster",
+    "name": "McMaster-Carr",
+    "aliases": ["McMaster Carr"],
+    "domains": ["mcmaster.com"],
+    "phone": "(609) 689-3000",
+    "bankLast4": "9034",
+    "contactUrl": "https://www.mcmaster.com/contact/"
+  }
+]

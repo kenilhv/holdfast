@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Holdfast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #f3efe6; --card: #fbf9f3; --ink: #1a1712; --soft: #6b6456; --line: #d8d1c2;
+  --pass: #1d6b47; --hold: #b0520d; --block: #a01c1c; --pass-bg: #e3efe6; --hold-bg: #f8ead8; --block-bg: #f6e0dd;
+  --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace; --serif: Fraunces, Georgia, serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
+button, textarea { font: inherit; color: inherit; }
+header { display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; padding: 22px 28px 16px; border-bottom: 2px solid var(--ink); }
+h1 { font: 700 30px/1 var(--serif); letter-spacing: -.02em; margin: 0; }
+.tag { color: var(--soft); }
+.lights { margin-left: auto; display: flex; gap: 14px; font: 12px var(--mono); color: var(--soft); flex-wrap: wrap; }
+.light::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--line); margin-right: 6px; }
+.light.on::before { background: var(--pass); }
+.light.off::before { background: var(--block); }
+main { display: grid; grid-template-columns: 330px minmax(0, 1fr) minmax(0, 1.1fr); min-height: calc(100vh - 80px); }
+section { padding: 20px 24px; border-right: 1px solid var(--line); min-width: 0; }
+section:last-child { border-right: 0; }
+h2 { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin: 0 0 12px; }
+h2:not(:first-child) { margin-top: 26px; }
+.bill { display: block; width: 100%; text-align: left; background: var(--card); border: 1px solid var(--line); padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: border-color .15s, transform .15s; }
+.bill:hover { border-color: var(--ink); transform: translateX(2px); }
+.bill b { display: block; font-weight: 600; }
+.bill span { color: var(--soft); font-size: 13px; }
+textarea { width: 100%; height: 150px; resize: vertical; background: var(--card); border: 1px solid var(--line); padding: 10px; font: 12.5px/1.45 var(--mono); }
+textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.go { width: 100%; margin-top: 8px; background: var(--ink); color: var(--paper); border: 0; padding: 11px; font-weight: 600; cursor: pointer; }
+.go:disabled { opacity: .5; cursor: wait; }
+.note { color: var(--soft); font-size: 13px; }
+.err { color: var(--block); font-size: 13px; min-height: 1.4em; margin: 6px 0 0; }
+.past { display: flex; gap: 8px; align-items: center; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 8px 0; text-align: left; cursor: pointer; }
+.past .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.past.sel .who { font-weight: 600; }
+.chip { font: 500 11px var(--mono); padding: 2px 6px; border: 1px solid currentColor; }
+.PASS { color: var(--pass); } .HOLD { color: var(--hold); } .BLOCK { color: var(--block); } .WAIT { color: var(--soft); }
+.steps { list-style: none; margin: 0; padding: 0; }
+.steps li { position: relative; padding: 0 0 14px 22px; animation: rise .22s ease-out both; }
+.steps li::before { content: ""; position: absolute; left: 3px; top: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--soft); }
+.steps li::after { content: ""; position: absolute; left: 7px; top: 18px; bottom: -6px; width: 1px; background: var(--line); }
+.steps li:last-child::after { display: none; }
+.steps .ok::before { background: var(--pass); } .steps .warn::before { background: var(--hold); } .steps .bad::before { background: var(--block); }
+.steps b { font-weight: 600; }
+.steps time { font: 11px var(--mono); color: var(--soft); margin-left: 6px; }
+.steps p { margin: 1px 0 0; color: var(--soft); font-size: 13.5px; overflow-wrap: anywhere; }
+@keyframes rise { from { opacity: 0; transform: translateY(5px); } }
+.empty { color: var(--soft); padding: 28px 0; }
+.stampline { display: flex; align-items: center; gap: 22px; min-height: 92px; }
+.stamp { font: 700 38px/1 var(--serif); letter-spacing: .04em; border: 4px double currentColor; padding: 10px 16px 8px; transform: rotate(-5deg); animation: stamp .24s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes stamp { from { opacity: 0; transform: rotate(-5deg) scale(1.5); } }
+.who-big { min-width: 0; overflow-wrap: anywhere; }
+.who-big b { display: block; font: 700 21px/1.2 var(--serif); }
+.meter { position: relative; height: 10px; background: linear-gradient(90deg, var(--pass-bg) 33.33%, var(--hold-bg) 33.33% 66.66%, var(--block-bg) 66.66%); margin: 16px 0 5px; }
+.meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); transition: width .4s ease-out; }
+.ticks { display: grid; grid-template-columns: 1fr 1fr 1fr; font: 11px var(--mono); color: var(--soft); }
+.sig { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.sig .pts { font: 500 13px var(--mono); color: var(--block); min-width: 34px; }
+.sig b { font-weight: 600; } .sig p { margin: 0; color: var(--soft); font-size: 13.5px; overflow-wrap: anywhere; }
+.ev { font: 12px/1.5 var(--mono); padding: 7px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.ev a { color: inherit; }
+.ev q { display: block; color: var(--soft); quotes: none; margin-top: 2px; }
+.refused { background: var(--block-bg); padding: 9px 11px; margin-top: 8px; font-size: 13.5px; overflow-wrap: anywhere; animation: rise .22s ease-out both; }
+.refused b { color: var(--block); }
+.acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.acts button { background: none; border: 1px solid var(--ink); padding: 8px 12px; font-weight: 500; cursor: pointer; }
+.acts button:hover { background: var(--ink); color: var(--paper); }
+.acts .quiet { border-color: var(--line); color: var(--soft); }
+.sigbox { font: 11px/1.45 var(--mono); color: var(--soft); overflow-wrap: anywhere; }
+@media (max-width: 1100px) { main { grid-template-columns: 1fr; } section { border-right: 0; border-bottom: 1px solid var(--line); padding: 18px 16px; } header { padding: 16px; } .lights { margin-left: 0; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Holdfast</h1>
+  <span class="tag">No vendor gets paid until it proves who it is.</span>
+  <div class="lights" id="lights"></div>
+</header>
+<main>
+  <section>
+    <h2>Forward a bill</h2>
+    <div id="demos"></div>
+    <textarea id="paste" aria-label="Paste a vendor email or invoice" placeholder="Or paste a vendor email here, with its From line"></textarea>
+    <button class="go" id="go">Check this bill</button>
+    <p class="err" id="err" role="alert"></p>
+    <h2>Checked</h2>
+    <div id="past"><p class="note">Nothing yet.</p></div>
+  </section>
+  <section aria-live="polite">
+    <h2>Live check</h2>
+    <div id="live"><p class="empty">Pick a bill to watch the check run.</p></div>
+  </section>
+  <section>
+    <h2>Signed record</h2>
+    <div id="record"><p class="empty">The verdict, the evidence and the signature show up here.</p></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const cases = new Map();
+let selected = location.hash.slice(1) || null;
+let thresholds = { hold: 40, block: 80 };
+let demoBills = [];
+
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+function show(error) { $("err").textContent = error ? error.message : ""; }
+
+async function submit(text) {
+  show(null);
+  $("go").disabled = true;
+  selected = null;
+  try { await api("/api/check", { text }); } catch (e) { show(e); }
+  setTimeout(() => ($("go").disabled = false), 800);
+}
+
+function renderPast() {
+  const list = [...cases.values()].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  if (!list.length) return;
+  $("past").innerHTML = list.map((c) => {
+    const v = c.verdict || (c.status === "failed" ? "BLOCK" : "WAIT");
+    const label = c.status === "failed" ? "FAILED" : c.verdict || "...";
+    return `<button class="past ${c.id === selected ? "sel" : ""}" data-id="${esc(c.id)}"><span class="chip ${v}">${label}</span><span class="who">${esc(c.vendor?.name || c.bill?.vendorName || c.preview)}</span></button>`;
+  }).join("");
+}
+
+function renderLive(c) {
+  if (!c) return;
+  $("live").innerHTML = `<ol class="steps">${c.steps.map((s) => `<li class="${esc(s.state)}"><b>${esc(s.label)}</b><time>${clock(s.at)}</time><p>${esc(s.detail)}</p></li>`).join("")}</ol>`;
+}
+
+function evidenceHtml(c) {
+  const pages = c.evidence.map((e) => `<div class="ev"><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.url)}</a><br>sha256 ${esc(e.contentHash.slice(0, 24))}, fetched ${clock(e.fetchedAt)}</div>`).join("");
+  const claims = c.claims.map((k) => `<div class="ev">${esc(k.text)}<q>"${esc(k.quote)}"</q></div>`).join("");
+  return pages || claims ? `<h2>Evidence</h2>${pages}${claims}` : "";
+}
+
+function renderRecord(c) {
+  if (!c) return;
+  if (c.status === "failed") {
+    $("record").innerHTML = `<div class="stampline"><div class="stamp BLOCK">NO PAY</div><div class="who-big"><b>Not checked</b><span class="note">${esc(c.error)}</span></div></div>`;
+    return;
+  }
+  if (!c.verdict) {
+    $("record").innerHTML = `<p class="empty">Checking...</p>`;
+    return;
+  }
+  const pct = Math.min(c.score, 120) / 1.2;
+  const signals = c.signals.length
+    ? c.signals.map((s) => `<div class="sig"><span class="pts">+${s.points}</span><div><b>${esc(s.label)}</b><p>${esc(s.detail)}</p></div></div>`).join("")
+    : `<p class="note">No risk signals. Sender, bank and phone match the records.</p>`;
+  const refused = c.refused.map((r) => `<div class="refused"><b>Refused.</b> ${esc(r.text)} ${esc(r.reason)}.</div>`).join("");
+  const decided = c.decision ? `<p class="note">Decision: <b>${esc(c.decision.action.toUpperCase())}</b> by ${esc(c.decision.by)} at ${clock(c.decision.at)}. Signed.</p>` : "";
+  const options = c.verdict === "HOLD" ? ["approve", "reject"] : c.verdict === "BLOCK" ? ["reject", "override"] : [];
+  const buttons = c.decision ? "" : options.map((a) => `<button data-act="${a}">${a[0].toUpperCase() + a.slice(1)}</button>`).join("");
+  $("record").innerHTML = `
+    <div class="stampline">
+      <div class="stamp ${c.verdict}">${c.verdict}</div>
+      <div class="who-big"><b>${esc(c.vendor?.name || c.bill?.vendorName || "Unknown vendor")}</b><span class="note">${c.bill?.amount ? "$" + esc(c.bill.amount) : ""} ${c.vendor ? `Trusted phone ${esc(c.vendor.phone)}` : ""}</span></div>
+    </div>
+    <div class="meter" role="img" aria-label="Score ${c.score}"><i style="width:${pct}%"></i></div>
+    <div class="ticks"><span>PASS</span><span>HOLD at ${thresholds.hold}</span><span>BLOCK at ${thresholds.block}</span></div>
+    <h2>Why: ${c.score} points</h2>${signals}
+    ${evidenceHtml(c)}
+    ${decided}${refused}
+    <div class="acts">${buttons}<button class="quiet" data-forge="1">Test the guardrail: forge a claim</button></div>
+    ${c.record ? `<h2>Signature</h2><p class="sigbox">${esc(c.record.signature)}<br>chain ${esc(c.record.chainHash)}</p>` : ""}`;
+}
+
+function render() {
+  renderPast();
+  const c = cases.get(selected);
+  renderLive(c);
+  renderRecord(c);
+}
+
+function upsert(c) {
+  cases.set(c.id, c);
+  if (!selected || !cases.has(selected) || cases.get(selected).status !== "running") {
+    if (c.status === "running" && c.steps.length <= 1) selected = c.id;
+  }
+  if (!selected) selected = c.id;
+  render();
+}
+
+$("go").onclick = () => submit($("paste").value);
+$("demos").onclick = (e) => {
+  const b = e.target.closest("[data-bill]");
+  if (!b) return;
+  const bill = demoBills.find((x) => x.id === b.dataset.bill);
+  $("paste").value = bill.text;
+  submit(bill.text);
+};
+$("past").onclick = (e) => {
+  const b = e.target.closest("[data-id]");
+  if (b) { selected = b.dataset.id; location.hash = selected; render(); }
+};
+$("record").onclick = async (e) => {
+  try {
+    if (e.target.dataset.act) upsert(await api(`/api/cases/${selected}/decide`, { action: e.target.dataset.act }));
+    if (e.target.dataset.forge) upsert(await api(`/api/cases/${selected}/forge`, {}));
+  } catch (err) { show(err); }
+};
+
+async function lights() {
+  const s = await api("/api/status");
+  thresholds = s.thresholds;
+  const l = (name, on) => `<span class="light ${on ? "on" : "off"}">${name}</span>`;
+  $("lights").innerHTML = l("Claude", s.claude) + l("Firecrawl", s.firecrawl) + l("iMessage", s.imessage) + l(s.chainBrokenAt ? "chain broken" : `chain ${s.chainLength}`, !s.chainBrokenAt);
+}
+
+async function start() {
+  demoBills = await api("/api/demo");
+  $("demos").innerHTML = demoBills.map((b) => `<button class="bill" data-bill="${esc(b.id)}"><b>${esc(b.title)}</b><span>${esc(b.note)}</span></button>`).join("");
+  for (const c of (await api("/api/cases")).reverse()) cases.set(c.id, c);
+  if (!cases.has(selected)) selected = [...cases.keys()].at(-1) ?? null;
+  render();
+  lights();
+  const stream = new EventSource("/api/stream");
+  stream.addEventListener("case", (e) => upsert(JSON.parse(e.data)));
+  // Traffic from an open board keeps a free Render instance awake during the demo.
+  setInterval(() => lights().catch(() => {}), 60_000);
+}
+start().catch(show);
+</script>
+</body>
+</html>

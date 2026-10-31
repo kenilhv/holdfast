@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: holdfast
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: node src/server.ts
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      - key: SPECTRUM_PROJECT_ID
+        sync: false
+      - key: SPECTRUM_PROJECT_SECRET
+        sync: false
+      - key: CONTROLLER_PHONE
+        sync: false
