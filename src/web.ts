@@ -74,7 +74,8 @@ export async function domainAge(domain: string): Promise<DomainAge> {
       headers: { Accept: "application/rdap+json", "User-Agent": "Holdfast/0.1" },
       signal: AbortSignal.timeout(8_000),
     });
-    if (res.status === 404) return { status: "missing" };
+    // Only the .com and .net registry is authoritative here. The public proxy also says 404 for real domains on other endings.
+    if (res.status === 404) return registry === "https://rdap.org" ? { status: "error", message: `no registry data for .${tld}` } : { status: "missing" };
     if (!res.ok) return { status: "error", message: `RDAP returned ${res.status}` };
     const json: any = await res.json();
     const registered = (json.events ?? []).find((e: any) => e.eventAction === "registration")?.eventDate;
