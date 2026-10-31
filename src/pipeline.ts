@@ -44,7 +44,7 @@ export interface Case {
   signals: Signal[];
   score: number;
   verdict?: Verdict;
-  evidence: Omit<Page, "text" | "phones">[];
+  evidence: (Omit<Page, "text" | "phones"> & { official: boolean })[];
   claims: Claim[];
   refused: (Claim & { reason: string; at: string })[];
   record?: { payload: unknown; signature: string; chainHash: string };
@@ -54,30 +54,53 @@ export interface Case {
 // The pages a run fetched stay out of the Case, so they never go to the browser.
 const fetchedPages = new Map<string, Page[]>();
 
-const header = (raw: string, name: string): string[] =>
-  [...raw.matchAll(new RegExp(`^(?:[>\\s]*)${name}:\\s*(.+)$`, "gim"))].map((m) => m[1].trim());
+const FORGED_URL = "https://vendor-verification.example/confirmed";
 
-// Header lines beat what Claude reports, because a bill can plant text to steer the model.
-// On a forwarded email the last From line is the original sender.
-export function senderFrom(raw: string): { from: string; replyTo: string } {
-  const from = header(raw, "From").at(-1) ?? "";
-  const replyTo = header(raw, "Reply-To").at(-1) ?? "";
-  return { from, replyTo };
+const header = (raw: string, name: string): string[] =>
+  [...raw.matchAll(new RegExp(`^[> \\t]*${name}:[ \\t]*(.+)$`, "gim"))].map((m) => m[1].trim());
+
+// The team's own addresses are skipped, so forwarding a real bill does not flag the person who forwarded it.
+const OWN_DOMAINS = (process.env.OWN_DOMAINS ?? "baylineconstruction.example").split(",").map((s) => s.trim().toLowerCase());
+
+const addresses = (raw: string, name: string) =>
+  header(raw, name).filter((line) => {
+    const domain = emailDomain(line);
+    return domain && !OWN_DOMAINS.includes(registrableDomain(domain));
+  });
+
+// Every line that names a sender. A line with no address, like "From: 10/01/2026", is not a sender.
+export function senderLines(raw: string): { from: string[]; replyTo: string[] } {
+  return { from: addresses(raw, "From"), replyTo: addresses(raw, "Reply-To") };
 }
 
+// A bill can plant a genuine From line, and a hijacked thread quotes one, so the worst sender on the page is the one that counts.
+export function worstSender(lines: string[], vendor: Vendor | null): string | undefined {
+  return lines.find((line) => !isOnFile(emailDomain(line), vendor)) ?? lines[0];
+}
+
+const BANK_CHANGE =
+  /\b(?:new|updated?|changed?|changing|moved|moving|switched|switching)\W+(?:\w+\W+){0,4}?(?:bank|banking|remit\w*|routing|ach|wire|account details|payment details)\b|\b(?:bank|banking|remit\w*|routing|account details|payment details)\W+(?:\w+\W+){0,4}?(?:changed?|moved|updated?)\b/i;
+
 // A value Claude read from pasted text must appear in that text, or it is dropped.
+// A drop only removes the value: a bank change Claude left out is still found in the raw text.
 export function groundFields(f: BillFields, raw: string): BillFields {
-  const lower = raw.toLowerCase();
-  const digits = raw.replace(/\D/g, "");
+  const text = raw.normalize("NFKC");
+  const lower = text.toLowerCase();
+  const digits = text.replace(/\D/g, "");
   const has = (v: string) => Boolean(v) && lower.includes(v.toLowerCase());
-  const sender = senderFrom(raw);
+  const sender = senderLines(raw);
+  const bankOk = /^\d{4}$/.test(f.bankLast4) && digits.includes(f.bankLast4);
+  const amount = f.amount.replace(/\D/g, "");
+  const phone = phoneDigits(f.phone);
   return {
     ...f,
     vendorName: has(f.vendorName) ? f.vendorName : "",
-    fromEmail: sender.from || (has(f.fromEmail) ? f.fromEmail : ""),
-    replyTo: sender.replyTo || (has(f.replyTo) ? f.replyTo : ""),
-    phone: f.phone && digits.includes(phoneDigits(f.phone)) ? f.phone : "",
-    bankLast4: /^\d{4}$/.test(f.bankLast4) && digits.includes(f.bankLast4) ? f.bankLast4 : "",
+    fromEmail: sender.from[0] ?? (has(f.fromEmail) && emailDomain(f.fromEmail) ? f.fromEmail : ""),
+    replyTo: sender.replyTo[0] ?? (has(f.replyTo) ? f.replyTo : ""),
+    phone: phone && digits.includes(phone) ? f.phone : "",
+    bankLast4: bankOk ? f.bankLast4 : "",
+    bankChangeClaimed: f.bankChangeClaimed || BANK_CHANGE.test(text) || (Boolean(f.bankLast4) && !bankOk),
+    amount: amount && digits.includes(amount) ? f.amount : "",
     urgencyQuote: has(f.urgencyQuote) ? f.urgencyQuote : "",
   };
 }
@@ -131,7 +154,7 @@ export function createEngine(d: {
       url = results[0].url;
     }
     const page = await fetchPage(url);
-    c.evidence.push({ url: page.url, fetchedAt: page.fetchedAt, contentHash: page.contentHash });
+    c.evidence.push({ url: page.url, fetchedAt: page.fetchedAt, contentHash: page.contentHash, official: Boolean(vendor) });
     step(c, vendor ? "Fetched official page" : "Fetched top search result", `${page.url} (${page.phones.length} phone number${page.phones.length === 1 ? "" : "s"} found)`, vendor ? "ok" : "info");
     return [page];
   }
@@ -159,11 +182,17 @@ export function createEngine(d: {
     try {
       const extracted = await extractBill(doc);
       const bill = doc.kind === "text" ? groundFields(extracted, raw) : extracted;
+      const vendor = findVendor(bill.vendorName, emailDomain(bill.fromEmail), d.vendors);
+      if (doc.kind === "text") {
+        const lines = senderLines(raw);
+        bill.fromEmail = worstSender(lines.from, vendor) ?? bill.fromEmail;
+        const sender = registrableDomain(emailDomain(bill.fromEmail));
+        bill.replyTo = lines.replyTo.find((line) => registrableDomain(emailDomain(line)) !== sender) ?? bill.replyTo;
+      }
       c.bill = bill;
       step(c, "Read the bill", `${bill.vendorName || "Unknown vendor"}, amount ${bill.amount || "not stated"}, sender ${bill.fromEmail || "not stated"}.`);
 
       const from = emailDomain(bill.fromEmail);
-      const vendor = findVendor(bill.vendorName, from, d.vendors);
       c.vendor = vendor && { id: vendor.id, name: vendor.name, phone: vendor.phone };
       step(c, "Vendor list", vendor ? `Matched ${vendor.name}.` : "No match on the vendor list.", vendor ? "ok" : "warn");
 
@@ -186,7 +215,13 @@ export function createEngine(d: {
       });
       submitClaims(c, claims);
 
-      c.signals = evaluate({ bill, vendor, domainAge: age, sitePhones: pages.length ? pages.flatMap((p) => p.phones) : null });
+      c.signals = evaluate({
+        bill,
+        vendor,
+        domainAge: age,
+        sitePhones: pages.length && vendor ? pages.flatMap((p) => p.phones) : null,
+        senderUnproven: doc.kind === "file",
+      });
       c.score = scoreOf(c.signals);
       c.verdict = verdictFor(c.score);
       step(c, "Decided", `${c.verdict} at ${c.score} points.`, c.verdict === "PASS" ? "ok" : c.verdict === "HOLD" ? "warn" : "bad");
@@ -200,6 +235,7 @@ export function createEngine(d: {
         verdict: c.verdict,
         evidence: c.evidence,
         claims: c.claims,
+        refused: c.refused.map(({ url, reason }) => ({ url, reason })),
         signedAt: new Date().toISOString(),
       };
       const signature = d.signer.sign(payload);
@@ -235,13 +271,9 @@ export function createEngine(d: {
   function forge(id: string): Case {
     const c = cases.get(id);
     if (!c) throw new Error("no such case");
-    submitClaims(c, [
-      {
-        text: "The vendor's portal confirms the new bank account.",
-        url: "https://vendor-verification.example/confirmed",
-        quote: "bank account change confirmed",
-      },
-    ]);
+    // Once per case: every step resends the whole case to every open board.
+    if (c.refused.some((r) => r.url === FORGED_URL)) return c;
+    submitClaims(c, [{ text: "The vendor's portal confirms the new bank account.", url: FORGED_URL, quote: "bank account change confirmed" }]);
     return c;
   }
 
@@ -265,6 +297,9 @@ export function createEngine(d: {
 
 export type Engine = ReturnType<typeof createEngine>;
 
+// The short code a text reply uses to name a bill, as in "REJECT 3f2a".
+export const billCode = (id: string) => id.slice(-4);
+
 // The text a flagged bill sends over iMessage.
 export function summary(c: Case, baseUrl: string): string {
   if (c.status === "failed") return `I could not check this bill: ${c.error}. Do not pay it yet.`;
@@ -272,8 +307,8 @@ export function summary(c: Case, baseUrl: string): string {
   const amount = c.bill?.amount ? ` for $${c.bill.amount}` : "";
   const reasons = c.signals.slice(0, 4).map((s) => `- ${s.detail}`);
   const link = baseUrl ? `\nRecord: ${baseUrl}/#${c.id}` : "";
-  if (c.verdict === "PASS") return `PASS: ${name}${amount}. Sender, bank and phone all match. Nothing to do.${link}`;
+  if (c.verdict === "PASS") return `PASS: ${name}${amount}. No risk signals in what this bill shows.${link}`;
   const call = c.vendor ? `Call ${c.vendor.name} on ${c.vendor.phone}, the number on file, not one from the email.\n` : "Do not call any number in the email.\n";
   const ask = c.verdict === "BLOCK" ? "Reply REJECT, or OVERRIDE after you verify it by phone." : "Reply APPROVE or REJECT.";
-  return `${c.verdict}: ${name}${amount}. ${c.score} points.\n${reasons.join("\n")}\n${call}${ask}${link}`;
+  return `${c.verdict} (bill ${billCode(c.id)}): ${name}${amount}. ${c.score} points.\n${reasons.join("\n")}\n${call}${ask}${link}`;
 }

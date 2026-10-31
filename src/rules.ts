@@ -1,4 +1,5 @@
-// The decision rules. All of this is plain code: Claude can only add the urgency points, so it can never clear a bill.
+// The decision rules. All of this is plain code. Claude reads the documents and can add the urgency points,
+// and a blank field never clears a bill: a missing sender or a claimed bank change still holds it.
 import { domainToUnicode } from "node:url";
 
 export const POINTS = {
@@ -7,7 +8,7 @@ export const POINTS = {
   bank_changed: 40,
   new_domain: 40,
   phone_mismatch: 40,
-  sender_unlisted: 30,
+  sender_unlisted: 40,
   reply_to: 30,
   urgency: 10,
 } as const;
@@ -56,13 +57,16 @@ export interface Facts {
   domainAge: DomainAge | null;
   // Digits of every phone number on the fetched official pages. Null when no page could be fetched.
   sitePhones: string[] | null;
+  // True for a photo or PDF, which can show any sender address.
+  senderUnproven?: boolean;
 }
 
 // Two-part public suffixes, so "acme.co.uk" keeps "acme" as the name.
 const TWO_PART_SUFFIXES = new Set(["co.uk", "org.uk", "ac.uk", "com.au", "net.au", "co.nz", "co.in", "com.br", "co.jp", "com.mx", "com.sg"]);
 
+// The address that counts is in the final angle brackets. A display name can hold a fake one.
 export function emailDomain(address: string): string {
-  const m = /@([^\s>,;]+)/.exec(address);
+  const m = /<[^<>\s]*@([^<>\s]+)>\s*$/.exec(address.trim()) ?? /@([^\s<>,;"')]+)[^@]*$/.exec(address);
   return m ? m[1].toLowerCase().replace(/\.$/, "") : "";
 }
 
@@ -137,7 +141,7 @@ export function findVendor(name: string, senderDomain: string, vendors: Vendor[]
   if (wanted) {
     for (const v of vendors) {
       for (const candidate of [v.name, ...v.aliases].map(companyName)) {
-        if (candidate === wanted || (candidate.length >= 4 && wanted.includes(candidate))) return v;
+        if (candidate === wanted || (candidate.length >= 4 && ` ${wanted} `.includes(` ${candidate} `))) return v;
       }
     }
   }
@@ -149,20 +153,27 @@ export function findVendor(name: string, senderDomain: string, vendors: Vendor[]
   );
 }
 
-export const phoneDigits = (s: string) => s.replace(/\D/g, "").slice(-10);
+// Drop an extension and a US leading 1, and nothing else, so "+44 800 472 4643" stays different from "800 472 4643".
+export const phoneDigits = (s: string) =>
+  s
+    .split(/\s*(?:ext\.?|x|#)\s*\d+\s*$/i)[0]
+    .replace(/\D/g, "")
+    .replace(/^1(?=\d{10}$)/, "");
 
 function signal(id: SignalId, label: string, detail: string): Signal {
   return { id, points: POINTS[id], label, detail };
 }
 
-export function evaluate({ bill, vendor, domainAge, sitePhones }: Facts): Signal[] {
+export function evaluate({ bill, vendor, domainAge, sitePhones, senderUnproven }: Facts): Signal[] {
   const out: Signal[] = [];
   const from = emailDomain(bill.fromEmail);
   const replyTo = emailDomain(bill.replyTo);
 
   if (!vendor) {
     out.push(signal("unknown_vendor", "Unknown vendor", `${bill.vendorName || "This sender"} is not on the vendor list.`));
-  } else if (from && !isOnFile(from, vendor)) {
+  } else if (!from) {
+    out.push(signal("sender_unlisted", "Sender not shown", `This bill names ${vendor.name} but shows no sender address to check.`));
+  } else if (!isOnFile(from, vendor)) {
     const real = vendor.domains[0];
     if (vendor.domains.some((d) => isLookalike(from, d))) {
       const edits = editDistance(nameLabel(from), nameLabel(real));
@@ -170,6 +181,8 @@ export function evaluate({ bill, vendor, domainAge, sitePhones }: Facts): Signal
     } else {
       out.push(signal("sender_unlisted", "Sender not on file", `${from} is not a domain on file for ${vendor.name}.`));
     }
+  } else if (senderUnproven) {
+    out.push(signal("sender_unlisted", "Sender not proven", "A photo or PDF can show any sender address."));
   }
 
   if (replyTo && from && registrableDomain(replyTo) !== registrableDomain(from)) {
@@ -184,12 +197,13 @@ export function evaluate({ bill, vendor, domainAge, sitePhones }: Facts): Signal
 
   if (vendor && bill.bankLast4 && bill.bankLast4 !== vendor.bankLast4) {
     out.push(signal("bank_changed", "Bank changed", `Bill pays account ending ${bill.bankLast4}. On file: ${vendor.bankLast4}.`));
+  } else if (vendor && !bill.bankLast4 && bill.bankChangeClaimed) {
+    out.push(signal("bank_changed", "Bank change claimed", "The bill says the bank details changed but gives no account digits to compare."));
   }
 
   if (vendor && bill.phone) {
-    const digits = phoneDigits(bill.phone);
     const trusted = [phoneDigits(vendor.phone), ...(sitePhones ?? [])];
-    if (digits.length === 10 && !trusted.includes(digits)) {
+    if (!trusted.includes(phoneDigits(bill.phone))) {
       out.push(signal("phone_mismatch", "Phone mismatch", `${bill.phone} is not on the official site or the vendor list.`));
     }
   }

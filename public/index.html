@@ -114,9 +114,21 @@ const cases = new Map();
 let selected = location.hash.slice(1) || null;
 let thresholds = { hold: 40, block: 80 };
 let demoBills = [];
+// Set when this board submits a bill, so the view moves to that bill and not to another one still running.
+let followNext = false;
+
+function storedKey() {
+  try { return sessionStorage.getItem("decideKey") || ""; } catch { return ""; }
+}
 
 async function api(path, body) {
-  const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined);
+  const send = (key) => fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json", "X-Decide-Key": key }, body: JSON.stringify(body) } : undefined);
+  let res = await send(storedKey());
+  if (res.status === 403) {
+    const key = prompt("Approving or overriding needs the operator key.") || "";
+    try { sessionStorage.setItem("decideKey", key); } catch {}
+    if (key) res = await send(key);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
@@ -127,14 +139,17 @@ function show(error) { $("err").textContent = error ? error.message : ""; }
 async function submit(text) {
   show(null);
   $("go").disabled = true;
-  selected = null;
-  try { await api("/api/check", { text }); } catch (e) { show(e); }
+  followNext = true;
+  try { await api("/api/check", { text }); } catch (e) { followNext = false; show(e); }
   setTimeout(() => ($("go").disabled = false), 800);
 }
 
 function renderPast() {
   const list = [...cases.values()].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
-  if (!list.length) return;
+  if (!list.length) {
+    $("past").innerHTML = `<p class="note">Nothing yet.</p>`;
+    return;
+  }
   $("past").innerHTML = list.map((c) => {
     const v = c.verdict || (c.status === "failed" ? "BLOCK" : "WAIT");
     const label = c.status === "failed" ? "FAILED" : c.verdict || "...";
@@ -154,9 +169,10 @@ function renderLive(c) {
 }
 
 function evidenceHtml(c) {
-  const pages = c.evidence.map((e) => `<div class="ev"><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.url)}</a><br>sha256 ${esc(e.contentHash.slice(0, 24))}, fetched ${clock(e.fetchedAt)}</div>`).join("");
+  const link = (u) => (/^https?:\/\//i.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>` : esc(u));
+  const pages = c.evidence.map((e) => `<div class="ev">${link(e.url)}<br>${e.official ? "Official page" : "Top search result, may be another company"}. sha256 ${esc(e.contentHash.slice(0, 24))}, fetched ${clock(e.fetchedAt)}</div>`).join("");
   const plain = (q) => q.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
-  const claims = c.claims.map((k) => `<div class="ev">${esc(k.text)}<q>"${esc(plain(k.quote))}"</q></div>`).join("");
+  const claims = c.claims.map((k) => `<div class="ev">"${esc(plain(k.quote))}"<q>Claude's reading: ${esc(k.text)}</q></div>`).join("");
   return pages || claims ? `<h2>Evidence</h2>${pages}${claims}` : "";
 }
 
@@ -173,7 +189,7 @@ function renderRecord(c) {
   const pct = Math.min(c.score, 120) / 1.2;
   const signals = c.signals.length
     ? c.signals.map((s) => `<div class="sig"><span class="pts">+${s.points}</span><div><b>${esc(s.label)}</b><p>${esc(s.detail)}</p></div></div>`).join("")
-    : `<p class="note">No risk signals. Sender, bank and phone match the records.</p>`;
+    : `<p class="note">No risk signals in what this bill shows.</p>`;
   const refused = c.refused.map((r) => `<div class="refused"><b>Refused.</b> ${esc(r.text)} ${esc(r.reason)}.</div>`).join("");
   const decided = c.decision ? `<p class="note">Decision: <b>${esc(c.decision.action.toUpperCase())}</b> by ${esc(c.decision.by)} at ${clock(c.decision.at)}. Signed.</p>` : "";
   const options = c.verdict === "HOLD" ? ["approve", "reject"] : c.verdict === "BLOCK" ? ["reject", "override"] : [];
@@ -197,18 +213,47 @@ function renderRecord(c) {
 function render() {
   renderPast();
   const c = cases.get(selected);
+  if (!c) {
+    $("live").innerHTML = `<p class="empty">Pick a bill to watch the check run.</p>`;
+    $("record").innerHTML = `<p class="empty">The verdict, the evidence and the signature show up here.</p>`;
+    return;
+  }
   renderLive(c);
   renderRecord(c);
 }
 
 function upsert(c) {
   cases.set(c.id, c);
-  if (!selected || !cases.has(selected) || cases.get(selected).status !== "running") {
-    if (c.status === "running" && c.steps.length <= 1) selected = c.id;
+  const isNew = c.status === "running" && c.steps.length <= 1;
+  if (followNext && isNew) {
+    selected = c.id;
+    followNext = false;
+  } else if (!followNext && (!selected || (isNew && cases.get(selected)?.status !== "running"))) {
+    selected = c.id;
   }
-  if (!selected) selected = c.id;
   render();
   if (c.status !== "running") lights().catch(() => {});
+}
+
+// The server is the truth. A restart or a dropped stream can leave this page behind, so it reloads the list.
+async function resync() {
+  const list = await api("/api/cases");
+  cases.clear();
+  for (const c of list.reverse()) cases.set(c.id, c);
+  if (!cases.has(selected)) selected = [...cases.keys()].at(-1) ?? null;
+  render();
+}
+
+let stream;
+function connect() {
+  stream?.close();
+  stream = new EventSource("/api/stream");
+  stream.onopen = () => resync().catch(() => {});
+  stream.addEventListener("case", (e) => upsert(JSON.parse(e.data)));
+  // A browser gives up for good after an error page, as a Render restart returns.
+  stream.onerror = () => {
+    if (stream.readyState === EventSource.CLOSED) setTimeout(connect, 2000);
+  };
 }
 
 $("go").onclick = () => submit($("paste").value);
@@ -240,16 +285,15 @@ async function lights() {
 async function start() {
   demoBills = await api("/api/demo");
   $("demos").innerHTML = demoBills.map((b) => `<button class="bill" data-bill="${esc(b.id)}"><b>${esc(b.title)}</b><span>${esc(b.note)}</span></button>`).join("");
-  for (const c of (await api("/api/cases")).reverse()) cases.set(c.id, c);
-  if (!cases.has(selected)) selected = [...cases.keys()].at(-1) ?? null;
-  render();
+  await resync();
   lights();
   const e = await api("/api/eval");
   $("eval").textContent = `Rules test: caught ${e.caught} of ${e.fraud} fraud bills, ${e.falseAlarms} false alarms on ${e.clean} clean bills. We wrote these ${e.fraud + e.clean} bills ourselves.`;
-  const stream = new EventSource("/api/stream");
-  stream.addEventListener("case", (e) => upsert(JSON.parse(e.data)));
-  // Traffic from an open board keeps a free Render instance awake during the demo.
-  setInterval(() => lights().catch(() => {}), 60_000);
+  connect();
+  setInterval(() => {
+    lights().catch(() => {});
+    resync().catch(() => {});
+  }, 60_000);
 }
 start().catch(show);
 </script>

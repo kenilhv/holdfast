@@ -17,3 +17,7 @@ services:
         sync: false
       - key: CONTROLLER_PHONE
         sync: false
+      - key: SIGNING_KEY_PEM
+        sync: false
+      - key: DECIDE_KEY
+        sync: false

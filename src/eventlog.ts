@@ -70,15 +70,22 @@ export function createEventLog(path: string) {
         (e) => (!filter.billId || e.billId === filter.billId) && (!filter.sinceSeq || e.seq > filter.sinceSeq),
       );
     },
-    // Recompute every hash; returns the first broken seq, or null when the chain is intact.
+    // Recompute every hash from the file, so an edit on disk shows up; returns the first broken seq, or null when intact.
     verify(): number | null {
+      if (!events.length) return null;
+      const stored: LogEvent[] = [];
+      try {
+        for (const line of readFileSync(path, "utf8").split("\n").filter(Boolean)) stored.push(JSON.parse(line));
+      } catch {
+        return stored.length + 1;
+      }
       let prev = "genesis";
-      for (const e of events) {
+      for (const e of stored) {
         const { hash, ...base } = e;
         if (e.prevHash !== prev || hashOf(base) !== hash) return e.seq;
         prev = hash;
       }
-      return null;
+      return stored.length === events.length && prev === events.at(-1)?.hash ? null : stored.length + 1;
     },
     lastSeq: () => events.at(-1)?.seq ?? 0,
   };

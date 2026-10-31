@@ -6,7 +6,7 @@ Send it a vendor email or invoice, on the board or over iMessage. It reads the b
 
 ## How it decides
 
-Plain code decides. Claude reads documents and web pages, and the only points it can add are the 10 for urgent wording, so it can never clear a bill.
+Plain code decides. Claude reads documents and web pages, and the only points it adds directly are the 10 for urgent wording. A blank field cannot clear a bill: a missing sender holds it, a photo or PDF never proves its sender, and bank-change wording is also searched for in the raw text.
 
 | Signal | Points |
 |---|---|
@@ -15,7 +15,7 @@ Plain code decides. Claude reads documents and web pages, and the only points it
 | Bank changed | 40 |
 | New domain | 40 |
 | Phone mismatch | 40 |
-| Sender not on file | 30 |
+| Sender not on file, not shown, or not proven | 40 |
 | Reply-To differs | 30 |
 | Urgent wording | 10 |
 
@@ -30,6 +30,10 @@ npm start
 ```
 
 `npm test` runs the tests. `npm run eval` runs the rules against 22 bills the team wrote.
+
+## Limits
+
+The board is public. Anyone can run a limited number of checks and reject a bill, but approving or overriding takes the operator key. Records and the hash chain live in memory and in a temporary file, so they last for one boot on Render's free tier. The signing key does survive restarts. The vendor list, its bank digits and the demo bills are made up for the demo.
 
 ## What came from where
 
