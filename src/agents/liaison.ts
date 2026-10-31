@@ -11,14 +11,22 @@ export interface Ask {
 
 const invoice = (c: Case) => (c.bill?.invoiceNumber ? `invoice ${c.bill.invoiceNumber}` : "an invoice");
 
+function dollars(amount = ""): string {
+  const n = Number(amount.replace(/[^0-9.]/g, ""));
+  return n ? ` for ${n.toLocaleString("en-US", { style: "currency", currency: "USD" })}` : "";
+}
+
+// The bare address, without a display name the sender wrote.
+const address = (from = "") => /[^\s<>"]+@[^\s<>"]+/.exec(from.split("<").at(-1) ?? "")?.[0] ?? from;
+
 export function askFor(c: Case, vendor: Vendor): Ask {
   const company = `Hello, this is the accounts payable desk at Bayline Construction, checking a bill from ${vendor.name}.`;
-  const amount = c.bill?.amount ? ` for $${c.bill.amount}` : "";
+  const amount = dollars(c.bill?.amount);
   // A wrong sender comes first: if the bill may be fake, the real vendor has no document to send.
   if (c.signals.some((s) => s.id === "lookalike" || s.id === "sender_unlisted")) {
     return {
       needs: "confirmation",
-      message: `${company} We received ${invoice(c)}${amount} from an address we don't have on file: ${c.bill?.fromEmail}. Did your company send this?`,
+      message: `${company} We received ${invoice(c)}${amount} from an address we don't have on file: ${address(c.bill?.fromEmail)}. Did your company send this?`,
     };
   }
   if (c.signals.some((s) => s.id === "bank_changed")) {

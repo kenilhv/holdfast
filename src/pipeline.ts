@@ -55,12 +55,14 @@ export interface Case {
   source: string;
   receivedAt: string;
   preview: string;
+  // The pasted text, so the board can mark up the bill itself. Files have none.
+  raw?: string;
   docHash: string;
   status: "running" | "done" | "failed";
   error?: string;
   steps: Step[];
   bill?: BillFields;
-  vendor?: Pick<Vendor, "id" | "name" | "phone"> | null;
+  vendor?: (Pick<Vendor, "id" | "name" | "phone"> & { domain: string }) | null;
   signals: Signal[];
   score: number;
   verdict?: Verdict;
@@ -189,6 +191,7 @@ export function createEngine(d: {
       source,
       receivedAt: new Date().toISOString(),
       preview: raw ? raw.replace(/\s+/g, " ").slice(0, 90) : "Attached file",
+      raw: raw || undefined,
       docHash: createHash("sha256").update(raw || (doc as any).base64).digest("hex"),
       status: "running",
       steps: [],
@@ -217,7 +220,7 @@ export function createEngine(d: {
       step(c, "Read the bill", `${bill.vendorName || "Unknown vendor"}, amount ${bill.amount || "not stated"}, sender ${bill.fromEmail || "not stated"}.`);
 
       const from = emailDomain(bill.fromEmail);
-      c.vendor = vendor && { id: vendor.id, name: vendor.name, phone: vendor.phone };
+      c.vendor = vendor && { id: vendor.id, name: vendor.name, phone: vendor.phone, domain: vendor.domains[0] };
       step(c, "Vendor list", vendor ? `Matched ${vendor.name}.` : "No match on the vendor list.", vendor ? "ok" : "warn");
 
       const needsAge = Boolean(from) && !isOnFile(from, vendor);

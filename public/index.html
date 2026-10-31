@@ -5,276 +5,645 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Holdfast</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,700;0,6..96,900;1,6..96,500&family=DM+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --paper: #f3efe6; --card: #fbf9f3; --ink: #1a1712; --soft: #6b6456; --line: #d8d1c2;
-  --pass: #1d6b47; --hold: #b0520d; --block: #a01c1c; --pass-bg: #e3efe6; --hold-bg: #f8ead8; --block-bg: #f6e0dd;
-  --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace; --serif: Fraunces, Georgia, serif;
+  /* Check safety paper, and the inks that go on it. Blue is carbon copy: anything a machine wrote. */
+  --page: #dfe8e3; --sheet: #f4f8f4; --band: #0d2629; --ink: #0d2629; --soft: #48625f; --rule: #bccdc5; --faint: #d2dfd9;
+  --carbon: #2237b0; --carbon-bg: #e4e8f8;
+  --pass: #0a6a4b; --pass-bg: #d9ecdf; --hold: #9c5600; --hold-bg: #f6e6c8; --block: #b0111a; --block-bg: #f7dcda;
+  --imessage: #0a7cff; --bubble: #e7e9ec; --bezel: #0a0f10;
+  --display: "Bodoni Moda", "Didot", Georgia, serif;
+  --ui: "Schibsted Grotesk", system-ui, sans-serif;
+  --data: "DM Mono", ui-monospace, Consolas, monospace;
+  --out: cubic-bezier(.23, 1, .32, 1);
+  --wipe: cubic-bezier(.77, 0, .175, 1);
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
-button, textarea { font: inherit; color: inherit; }
-header { display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; padding: 22px 28px 16px; border-bottom: 2px solid var(--ink); }
-h1 { font: 700 30px/1 var(--serif); letter-spacing: -.02em; margin: 0; }
-.tag { color: var(--soft); }
-.lights { margin-left: auto; display: flex; gap: 14px; font: 12px var(--mono); color: var(--soft); flex-wrap: wrap; }
-.light::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--line); margin-right: 6px; }
-.light.on::before { background: var(--pass); }
-.light.off::before { background: var(--block); }
-main { display: grid; grid-template-columns: 330px minmax(0, 1fr) minmax(0, 1.1fr); min-height: calc(100vh - 80px); }
-section { padding: 20px 24px; border-right: 1px solid var(--line); min-width: 0; }
-section:last-child { border-right: 0; }
-h2 { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin: 0 0 12px; }
-h2:not(:first-child) { margin-top: 26px; }
-.bill { display: block; width: 100%; text-align: left; background: var(--card); border: 1px solid var(--line); padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: border-color .15s, transform .15s; }
-.bill:hover { border-color: var(--ink); transform: translateX(2px); }
-.bill b { display: block; font-weight: 600; }
-.bill span { color: var(--soft); font-size: 13px; }
-textarea { width: 100%; height: 150px; resize: vertical; background: var(--card); border: 1px solid var(--line); padding: 10px; font: 12.5px/1.45 var(--mono); }
-textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
-.go { width: 100%; margin-top: 8px; background: var(--ink); color: var(--paper); border: 0; padding: 11px; font-weight: 600; cursor: pointer; }
-.go:disabled { opacity: .5; cursor: wait; }
-.note { color: var(--soft); font-size: 13px; }
-.err { color: var(--block); font-size: 13px; min-height: 1.4em; margin: 6px 0 0; }
-.past { display: flex; gap: 8px; align-items: center; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 8px 0; text-align: left; cursor: pointer; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--ink); font: 15px/1.5 var(--ui); -webkit-font-smoothing: antialiased; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--carbon); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.bar { background: var(--band); color: var(--sheet); display: flex; align-items: center; gap: 18px; padding: 0 24px; height: 60px; flex-wrap: wrap; }
+.mark-word { font: italic 500 30px/1 var(--display); letter-spacing: -.01em; }
+.promise { color: #b6cdc6; }
+.lights { margin-left: auto; display: flex; gap: 16px; font: 12px var(--data); color: #b6cdc6; }
+.light { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.light i { width: 7px; height: 7px; border-radius: 50%; background: #5d7471; }
+.light.on i { background: #54d6a1; }
+.light.off i { background: #ff8a7a; }
+/* Microprint: a real check security device, and here a real sentence. */
+.micro { font: 7px/11px var(--data); letter-spacing: .08em; color: var(--soft); white-space: nowrap; overflow: hidden; border-bottom: 1px solid var(--rule); background: var(--sheet); padding-left: 24px; user-select: none; }
+
+.desk { display: grid; grid-template-columns: 268px minmax(0, 1fr) 372px; height: calc(100vh - 71px); }
+.tray, .case, .crew { min-width: 0; overflow-y: auto; }
+.tray { padding: 18px 16px; border-right: 1px solid var(--rule); }
+.case { padding: 20px 26px 40px; }
+.crew { padding: 18px 16px; border-left: 1px solid var(--rule); background: #d7e2dc; display: flex; flex-direction: column; gap: 14px; }
+h2 { font: 500 11px var(--data); letter-spacing: .1em; text-transform: uppercase; color: var(--soft); margin: 0 0 9px; }
+
+.bill-btn { display: block; width: 100%; text-align: left; background: var(--sheet); border: 1px solid var(--rule); padding: 10px 12px; margin-bottom: 7px; transition: border-color 140ms ease, transform 140ms var(--out); }
+.bill-btn:active { transform: scale(.98); }
+.bill-btn b { display: block; font-weight: 600; }
+.bill-btn span { color: var(--soft); font-size: 13px; line-height: 1.35; display: block; }
+@media (hover: hover) and (pointer: fine) { .bill-btn:hover { border-color: var(--ink); } }
+.paste { margin: 8px 0 18px; }
+.paste summary { cursor: pointer; font-size: 13.5px; color: var(--soft); padding: 4px 0; }
+textarea { width: 100%; height: 130px; resize: vertical; background: var(--sheet); border: 1px solid var(--rule); padding: 9px; font: 12px/1.5 var(--data); margin-top: 6px; }
+.go { width: 100%; margin-top: 6px; background: var(--ink); color: var(--sheet); border: 0; padding: 10px; font-weight: 600; transition: transform 140ms var(--out); }
+.go:active { transform: scale(.98); }
+.past { display: flex; gap: 8px; align-items: center; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 7px 2px; text-align: left; }
 .past .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .past.sel .who { font-weight: 600; }
-.chip { font: 500 11px var(--mono); padding: 2px 6px; border: 1px solid currentColor; }
-.PASS { color: var(--pass); } .HOLD { color: var(--hold); } .BLOCK { color: var(--block); } .WAIT { color: var(--soft); }
-.steps { list-style: none; margin: 0; padding: 0; }
-.steps li { position: relative; padding: 0 0 14px 22px; }
-.steps li.new { animation: rise .22s ease-out both; }
-.steps li::before { content: ""; position: absolute; left: 3px; top: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--soft); }
-.steps li::after { content: ""; position: absolute; left: 7px; top: 18px; bottom: -6px; width: 1px; background: var(--line); }
-.steps li:last-child::after { display: none; }
-.steps .ok::before { background: var(--pass); } .steps .warn::before { background: var(--hold); } .steps .bad::before { background: var(--block); }
-.steps b { font-weight: 600; }
-.steps time { font: 11px var(--mono); color: var(--soft); margin-left: 6px; }
-.steps p { margin: 1px 0 0; color: var(--soft); font-size: 13.5px; overflow-wrap: anywhere; }
-@keyframes rise { from { opacity: 0; transform: translateY(5px); } }
-.empty { color: var(--soft); padding: 28px 0; }
-.stampline { display: flex; align-items: center; gap: 22px; min-height: 92px; }
-.stamp { font: 700 38px/1 var(--serif); letter-spacing: .04em; border: 4px double currentColor; padding: 10px 16px 8px; transform: rotate(-5deg); }
-.stamp.fresh { animation: stamp .24s cubic-bezier(.2, 1.4, .4, 1) both; }
-@keyframes stamp { from { opacity: 0; transform: rotate(-5deg) scale(1.5); } }
-.who-big { min-width: 0; overflow-wrap: anywhere; }
-.who-big b { display: block; font: 700 21px/1.2 var(--serif); }
-.meter { position: relative; height: 10px; background: linear-gradient(90deg, var(--pass-bg) 33.33%, var(--hold-bg) 33.33% 66.66%, var(--block-bg) 66.66%); margin: 16px 0 5px; }
-.meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); transition: width .4s ease-out; }
-.ticks { display: grid; grid-template-columns: 1fr 1fr 1fr; font: 11px var(--mono); color: var(--soft); }
-.sig { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
-.sig .pts { font: 500 13px var(--mono); color: var(--block); min-width: 34px; }
-.sig b { font-weight: 600; } .sig p { margin: 0; color: var(--soft); font-size: 13.5px; overflow-wrap: anywhere; }
-.ev { font: 12px/1.5 var(--mono); padding: 7px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.ev a { color: inherit; }
-.ev q { display: block; color: var(--soft); quotes: none; margin-top: 2px; }
-.refused { background: var(--block-bg); padding: 9px 11px; margin-top: 8px; font-size: 13.5px; overflow-wrap: anywhere; animation: rise .22s ease-out both; }
+.chip { font: 500 10.5px/1 var(--data); padding: 3px 5px; color: var(--sheet); flex: none; }
+.chip.PASS { background: var(--pass); } .chip.HOLD { background: var(--hold); } .chip.BLOCK { background: var(--block); } .chip.WAIT { background: var(--soft); }
+.fine { color: var(--soft); font-size: 12.5px; line-height: 1.45; margin: 16px 0 0; }
+
+.head { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+.verdict { font: 900 58px/.9 var(--display); letter-spacing: .01em; margin: 0; }
+.verdict.PASS { color: var(--pass); } .verdict.HOLD { color: var(--hold); } .verdict.BLOCK { color: var(--block); } .verdict.WAIT { color: var(--soft); }
+.who-line { min-width: 0; flex: 1; }
+/* Bodoni's hairlines vanish at this size, so names use its sturdier small-text cut. */
+.who-line b { display: block; font: 700 25px/1.15 var(--display); font-optical-sizing: none; font-variation-settings: "opsz" 11; overflow-wrap: anywhere; }
+.who-line > div { display: flex; flex-wrap: wrap; gap: 0 14px; color: var(--soft); font-size: 13.5px; }
+.who-line span { white-space: nowrap; }
+/* A dollar amount must never be misread, so it gets the plain face. */
+.amount { font: 700 30px/1 var(--ui); margin-left: auto; letter-spacing: -.01em; white-space: nowrap; }
+
+.rail { position: relative; height: 12px; background: var(--faint); margin-top: 16px; display: flex; overflow: hidden; }
+.rail i { display: block; height: 100%; transform-origin: left; border-right: 2px solid var(--page); }
+.rail.grow i { animation: fill 340ms var(--out) both; }
+.rail .PASS { background: var(--pass); } .rail .HOLD { background: var(--hold); } .rail .BLOCK { background: var(--block); }
+@keyframes fill { from { transform: scaleX(0); } }
+.ticks { position: relative; height: 18px; font: 11px var(--data); color: var(--soft); }
+.ticks span { position: absolute; top: 3px; }
+.ticks span::before { content: ""; position: absolute; left: 0; top: -19px; height: 15px; width: 1px; background: var(--ink); }
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; min-height: 40px; }
+.act { min-height: 44px; padding: 9px 16px; background: var(--sheet); border: 1px solid var(--ink); font-weight: 600; transition: transform 140ms var(--out), background-color 140ms ease; }
+.act:active { transform: scale(.97); }
+.act.main { background: var(--ink); color: var(--sheet); }
+.act.danger { background: var(--block); border-color: var(--block); color: #fff; }
+.decided { font-weight: 600; }
+
+.report { margin-top: 12px; background: var(--carbon-bg); border-left: 4px solid var(--carbon); padding: 11px 14px; animation: rise 220ms var(--out) both; }
+.report b { color: var(--carbon); display: block; font-size: 12px; font-family: var(--data); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+.report p { margin: 0; font-size: 16px; font-weight: 500; }
+.report small { display: block; margin-top: 5px; color: var(--soft); font-size: 13.5px; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+
+.papers { display: grid; grid-template-columns: minmax(0, 1fr) 248px; gap: 18px; margin-top: 14px; align-items: start; }
+.sheet { position: relative; overflow: hidden; background-color: var(--sheet); border: 1px solid var(--rule); box-shadow: 0 1px 0 #fff inset, 0 10px 24px -18px rgba(13, 38, 41, .55); min-height: 320px; display: flex; flex-direction: column; }
+/* Safety paper: a fine wave printed across the whole sheet. */
+.sheet::before { content: ""; position: absolute; inset: 0; opacity: .55; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='14'%3E%3Cpath d='M0 7c8-8 16-8 24 0s16 8 24 0' fill='none' stroke='%23bccdc5' stroke-width='.6'/%3E%3C/svg%3E"); }
+.panto { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .34; }
+.panto.PASS { color: var(--pass); opacity: .2; } .panto.HOLD { color: var(--hold); } .panto.BLOCK { color: var(--block); }
+.panto.reveal { animation: surface 760ms var(--wipe) both; }
+@keyframes surface { from { clip-path: inset(0 100% 0 0); opacity: 0; } 30% { opacity: .5; } }
+.body { position: relative; flex: 1; margin: 0; padding: 18px 20px; font: 13.5px/1.7 var(--data); white-space: pre-wrap; overflow-wrap: anywhere; }
+mark { background: none; color: inherit; font-weight: 500; }
+mark.bad { background: var(--block-bg); box-shadow: inset 0 -2px 0 var(--block); }
+mark.warn { background: var(--hold-bg); box-shadow: inset 0 -2px 0 var(--hold); }
+mark.quiet { background: var(--carbon-bg); box-shadow: inset 0 -2px 0 var(--carbon); }
+mark u { text-decoration: none; background: var(--block); color: #fff; padding: 0 1px; }
+.micr { position: relative; border-top: 1px dashed var(--rule); padding: 8px 20px; font: 11.5px var(--data); color: var(--soft); letter-spacing: .08em; overflow-wrap: anywhere; }
+.blank { position: relative; flex: 1; display: grid; place-content: center; text-align: center; padding: 40px 24px; color: var(--soft); }
+.blank strong { display: block; font: 700 30px/1.2 var(--display); font-optical-sizing: none; font-variation-settings: "opsz" 11; color: var(--ink); margin-bottom: 8px; }
+.papers.open { grid-template-columns: minmax(0, 1fr); }
+
+.notes h2 { margin-bottom: 4px; }
+.note { padding: 9px 0; border-bottom: 1px solid var(--rule); }
+.notes.drop .note { animation: rise 240ms var(--out) both; animation-delay: calc(var(--i) * 60ms + 120ms); }
+.note b { font-weight: 600; display: block; line-height: 1.3; }
+.note b em { font: 500 12px var(--data); color: var(--block); float: right; }
+.note.machine b, .note.machine b em { color: var(--carbon); }
+.note p { margin: 2px 0 0; font-size: 13px; line-height: 1.4; color: var(--soft); overflow-wrap: anywhere; }
+
+.block { margin-top: 24px; }
+.ev { padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 14px; overflow-wrap: anywhere; }
+.ev a { color: var(--ink); font-weight: 500; }
+.ev small { display: block; color: var(--soft); font: 11.5px var(--data); margin-top: 2px; }
+.ev q { display: block; quotes: none; font-weight: 500; }
+.ev span { color: var(--carbon); font-size: 13.5px; }
+.refused { background: var(--block-bg); border-left: 4px solid var(--block); padding: 9px 12px; margin-top: 10px; font-size: 14px; overflow-wrap: anywhere; animation: rise 220ms var(--out) both; }
 .refused b { color: var(--block); }
-.acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.acts button { background: none; border: 1px solid var(--ink); padding: 8px 12px; font-weight: 500; cursor: pointer; }
-.acts button:hover { background: var(--ink); color: var(--paper); }
-.acts .quiet { border-color: var(--line); color: var(--soft); }
-.sigbox { font: 11px/1.45 var(--mono); color: var(--soft); overflow-wrap: anywhere; }
-.bubble { max-width: 86%; padding: 8px 11px; margin: 6px 0; font-size: 14px; overflow-wrap: anywhere; animation: rise .2s ease-out both; }
-.bubble.agent { background: var(--ink); color: var(--paper); margin-left: auto; }
-.bubble.vendor { background: var(--card); border: 1px solid var(--line); }
-.bubble small { display: block; opacity: .7; font: 10.5px var(--mono); margin-bottom: 2px; }
-#vendorBox { margin-bottom: 22px; }
-#vendorForm, #askForm { margin-top: 10px; }
-.row { display: flex; gap: 8px; }
-.row input { flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line); padding: 8px 10px; font: inherit; color: inherit; }
-.row button, #vendorForm .acts button { background: none; border: 1px solid var(--ink); padding: 8px 12px; font-weight: 500; cursor: pointer; }
-#askAnswer:not(:empty) { margin-top: 8px; }
-.rec { background: var(--card); border-left: 3px solid var(--ink); padding: 9px 12px; margin-top: 8px; }
-.rec b { display: block; font-weight: 600; }
-@media (max-width: 1100px) { main { grid-template-columns: 1fr; } section { border-right: 0; border-bottom: 1px solid var(--line); padding: 18px 16px; } header { padding: 16px; } .lights { margin-left: 0; } }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+.quiet-btn { background: none; border: 1px solid var(--soft); min-height: 44px; padding: 7px 12px; font-size: 13.5px; transition: border-color 140ms ease, transform 140ms var(--out); }
+.actions .quiet-btn { margin-left: auto; }
+.quiet-btn:active { transform: scale(.97); }
+details.audit { margin-top: 24px; border-top: 1px solid var(--rule); padding-top: 10px; }
+details.audit summary { cursor: pointer; font: 500 11px var(--data); letter-spacing: .1em; text-transform: uppercase; color: var(--soft); }
+.trail { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13.5px; }
+.trail li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; padding: 4px 0; }
+.trail time { font: 11.5px var(--data); color: var(--soft); padding-top: 2px; }
+.trail p { margin: 0; overflow-wrap: anywhere; } .trail b { font-weight: 600; }
+.sig { font: 11.5px/1.5 var(--data); color: var(--soft); overflow-wrap: anywhere; margin: 8px 0 0; }
+
+.agents { background: var(--sheet); border: 1px solid var(--rule); }
+.agent { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 0 8px; padding: 5px 10px; border-bottom: 1px solid var(--faint); align-items: baseline; }
+.agent:last-child { border-bottom: 0; }
+.agent .dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--rule); align-self: center; }
+.agent b { font-weight: 600; }
+.agent em { font: 10.5px var(--data); font-style: normal; color: var(--soft); }
+.agent p { grid-column: 2 / -1; margin: 0; font-size: 12.5px; line-height: 1.3; color: var(--soft); overflow-wrap: anywhere; }
+.agent.done .dot { background: var(--pass); border-color: var(--pass); }
+.agent.bad .dot { background: var(--block); border-color: var(--block); }
+.agent.wait .dot { background: var(--hold); border-color: var(--hold); }
+.agent.run { background: var(--carbon-bg); }
+.agent.run .dot { border-color: var(--carbon); border-top-color: transparent; animation: spin 700ms linear infinite; }
+.agent.run p { color: var(--carbon); }
+.agent.off b, .agent.off p { color: #587270; font-weight: 400; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ask { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--rule); background: var(--sheet); border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-top: -15px; }
+.ask input { flex: 1; min-width: 0; border: 1px solid var(--rule); background: #fff; padding: 6px 9px; font-size: 13.5px; }
+.ask button { background: var(--carbon); color: #fff; border: 0; padding: 6px 12px; font-weight: 600; font-size: 13.5px; }
+.answer { font-size: 14px; color: var(--carbon); margin: -8px 2px 0; }
+
+.phone-wrap { flex: 1; min-height: 320px; display: flex; flex-direction: column; }
+.phone { background: var(--bezel); border-radius: 26px; padding: 7px; flex: 1; min-height: 0; display: flex; flex-direction: column; box-shadow: 0 16px 30px -22px rgba(0, 0, 0, .8); }
+.screen { background: #fff; border-radius: 20px; flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.contact { text-align: center; padding: 8px 12px 7px; border-bottom: 1px solid #e3e6e8; background: #f8f9fa; }
+.contact b { display: block; font-weight: 600; font-size: 13.5px; }
+.thread { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 5px; min-height: 120px; }
+.msg { max-width: 82%; padding: 7px 11px; border-radius: 17px; font-size: 14px; line-height: 1.36; overflow-wrap: anywhere; }
+.msg.new { animation: pop 200ms var(--out) both; }
+.msg.them { background: var(--bubble); color: #111; align-self: flex-start; border-bottom-left-radius: 5px; }
+.msg.me { background: var(--imessage); color: #fff; align-self: flex-end; border-bottom-right-radius: 5px; }
+.msg.file { display: flex; gap: 7px; align-items: center; font-weight: 500; }
+@keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+.dots { display: inline-flex; gap: 4px; padding: 11px 13px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: #8d9693; animation: blink 1s infinite; }
+.dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+.nothing { margin: auto; text-align: center; color: #66736f; font-size: 13.5px; padding: 12px 18px; }
+.compose { border-top: 1px solid #e3e6e8; padding: 7px; }
+.attach { display: flex; gap: 6px; margin-bottom: 6px; }
+.attach button { flex: 1; border: 1px solid #d3d9d7; background: #f6f7f7; color: #111; border-radius: 12px; padding: 5px 6px; font-size: 12px; font-weight: 500; transition: transform 140ms var(--out); }
+.attach button:active { transform: scale(.97); }
+.write { display: flex; gap: 6px; }
+.write input { flex: 1; min-width: 0; border: 1px solid #d3d9d7; border-radius: 16px; padding: 6px 12px; font-size: 14px; background: #fff; color: #111; }
+.write button { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--imessage); color: #fff; font-weight: 700; flex: none; }
+
+dialog { border: 1px solid var(--ink); padding: 18px; background: var(--sheet); color: var(--ink); width: min(340px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(13, 38, 41, .45); }
+dialog h3 { margin: 0 0 4px; font: 700 20px var(--display); }
+dialog p { margin: 0 0 10px; color: var(--soft); font-size: 14px; }
+dialog input { width: 100%; border: 1px solid var(--rule); padding: 8px 10px; background: #fff; font-family: var(--data); }
+dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 12px 0 0; padding: 0; }
+#toasts { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 20; width: min(440px, calc(100vw - 32px)); pointer-events: none; }
+.toast { background: var(--ink); color: var(--sheet); padding: 10px 14px; font-weight: 500; transition: opacity 180ms ease, transform 180ms var(--out); }
+.toast.bad { background: var(--block); }
+.toast.leaving { opacity: 0; transform: translateY(6px); }
+@starting-style { .toast { opacity: 0; transform: translateY(8px); } }
+
+@media (max-width: 1240px) {
+  .desk { grid-template-columns: 240px minmax(0, 1fr); height: auto; }
+  .crew { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--rule); flex-direction: row; flex-wrap: wrap; }
+  .crew > * { flex: 1 1 320px; }
+  .ask, .answer { margin-top: 0; }
+  .tray, .case, .crew { overflow: visible; }
+}
+@media (max-width: 760px) {
+  .bar { height: auto; padding: 10px 16px; gap: 4px 12px; }
+  .promise { width: 100%; order: 3; font-size: 13.5px; }
+  .lights { margin-left: 0; order: 4; flex-wrap: wrap; gap: 4px 12px; width: 100%; }
+  .micro { padding-left: 16px; }
+  .desk { grid-template-columns: minmax(0, 1fr); }
+  .tray { border-right: 0; border-bottom: 1px solid var(--rule); padding: 14px 16px; }
+  .case { padding: 16px; }
+  .crew { padding: 14px 16px; }
+  .papers { grid-template-columns: minmax(0, 1fr); }
+  .verdict { font-size: 46px; }
+  .amount { margin-left: 0; width: 100%; }
+  .phone-wrap { flex-basis: 100%; min-height: 420px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+  .agent.run .dot { animation: none; border-top-color: var(--carbon); }
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>Holdfast</h1>
-  <span class="tag">No vendor gets paid until it proves who it is.</span>
+<header class="bar">
+  <span class="mark-word">Holdfast</span>
+  <span class="promise">No vendor gets paid until it proves who it is.</span>
   <div class="lights" id="lights"></div>
 </header>
-<main>
-  <section>
-    <h2>Forward a bill</h2>
+<div class="micro" aria-hidden="true" id="micro"></div>
+<div class="desk">
+  <aside class="tray" aria-label="Bills">
+    <h2>In tray</h2>
     <div id="demos"></div>
-    <textarea id="paste" aria-label="Paste a vendor email or invoice" placeholder="Or paste a vendor email here, with its From line"></textarea>
-    <button class="go" id="go">Check this bill</button>
-    <p class="err" id="err" role="alert"></p>
-    <p class="note" id="eval"></p>
+    <details class="paste">
+      <summary>Paste a vendor email</summary>
+      <textarea id="paste" aria-label="Paste a vendor email or invoice" placeholder="Include the From line"></textarea>
+      <button class="go" id="go">Check this bill</button>
+    </details>
     <h2>Checked</h2>
-    <div id="past"><p class="note">Nothing yet.</p></div>
-  </section>
-  <section aria-live="polite">
-    <div id="vendorBox" hidden>
-      <h2 id="vendorTitle">Vendor conversation</h2>
-      <div id="chat"></div>
-      <form id="vendorForm" hidden>
-        <p class="note">Stand-in for the vendor's phone.</p>
-        <div class="row">
-          <input id="vendorText" aria-label="Reply as the vendor" placeholder="Reply as the vendor" autocomplete="off">
-          <button>Send</button>
-        </div>
-        <div class="acts">
-          <button type="button" data-letter="bank-letter-match.pdf">Send matching letter</button>
-          <button type="button" data-letter="bank-letter-wrong.pdf">Send wrong letter</button>
-        </div>
-      </form>
-      <form id="askForm">
-        <div class="row">
-          <input id="askText" aria-label="Ask the Controller about this bill" placeholder="Ask about this bill" autocomplete="off">
-          <button>Ask</button>
-        </div>
-        <p class="note" id="askAnswer"></p>
-      </form>
+    <div id="past"><p class="fine">Nothing yet.</p></div>
+    <p class="fine" id="eval"></p>
+  </aside>
+  <main class="case">
+    <div id="head"></div>
+    <div id="actions" class="actions" hidden></div>
+    <div id="report"></div>
+    <div class="papers" id="papers">
+      <div class="sheet" id="sheet"></div>
+      <div class="notes" id="notes"></div>
     </div>
-    <h2>Live check</h2>
-    <div id="live"><p class="empty">Pick a bill to watch the check run.</p></div>
-  </section>
-  <section>
-    <h2>Signed record</h2>
-    <div id="record"><p class="empty">The verdict, the evidence and the signature show up here.</p></div>
-  </section>
-</main>
+    <div id="evidence"></div>
+    <details class="audit" id="auditBox" hidden>
+      <summary>Audit trail and signature</summary>
+      <ol class="trail" id="trail"></ol>
+      <p class="sig" id="sig"></p>
+    </details>
+  </main>
+  <aside class="crew" aria-label="The crew">
+    <div>
+      <h2>The crew</h2>
+      <div class="agents" id="agents"></div>
+    </div>
+    <form class="ask" id="askForm" hidden>
+      <input id="askText" aria-label="Ask about this bill" placeholder="Ask about this bill" autocomplete="off">
+      <button>Ask</button>
+    </form>
+    <p class="answer" id="answer" aria-live="polite" hidden></p>
+    <div class="phone-wrap">
+    <h2 id="line">Vendor's phone</h2>
+    <div class="phone">
+      <div class="screen">
+        <div class="contact"><b>Bayline Construction AP</b></div>
+        <div class="thread" id="thread"></div>
+        <form class="compose" id="compose" hidden>
+          <div class="attach">
+            <button type="button" data-letter="bank-letter-match.pdf">Attach matching letter</button>
+            <button type="button" data-letter="bank-letter-wrong.pdf">Attach wrong letter</button>
+          </div>
+          <div class="write">
+            <input id="vendorText" aria-label="Reply as the vendor" placeholder="Reply as the vendor" autocomplete="off">
+            <button aria-label="Send">↑</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    </div>
+  </aside>
+</div>
+<dialog id="keyDialog">
+  <form method="dialog">
+    <h3>Operator key</h3>
+    <p>Approving or overriding moves money, so it needs the key.</p>
+    <input id="keyInput" type="password" aria-label="Operator key" autocomplete="off">
+    <menu>
+      <button class="quiet-btn" value="cancel" formnovalidate>Cancel</button>
+      <button class="act main" value="ok">Continue</button>
+    </menu>
+  </form>
+</dialog>
+<div id="toasts" role="status"></div>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const money = (a) => {
+  const n = Number(String(a ?? "").replace(/[^0-9.]/g, ""));
+  return n ? n.toLocaleString("en-US", { style: "currency", currency: "USD" }) : "";
+};
+const SCALE = 160;
 const cases = new Map();
 let selected = location.hash.slice(1) || null;
 let thresholds = { hold: 40, block: 80 };
 let demoBills = [];
 // Set when this board submits a bill, so the view moves to that bill and not to another one still running.
 let followNext = false;
+// What has already been shown, so only what is new animates.
+const shown = { sheet: "", notes: "", rail: "", thread: "" , threadCount: 0 };
+
+$("micro").textContent = "HOLDFAST NO VENDOR GETS PAID UNTIL IT PROVES WHO IT IS ".repeat(24);
+
+function toast(text, tone = "") {
+  const t = document.createElement("div");
+  t.className = `toast ${tone}`;
+  t.textContent = text;
+  $("toasts").append(t);
+  setTimeout(() => t.classList.add("leaving"), 3800);
+  setTimeout(() => t.remove(), 4000);
+}
 
 function storedKey() {
   try { return sessionStorage.getItem("decideKey") || ""; } catch { return ""; }
+}
+
+function askKey() {
+  return new Promise((resolve) => {
+    const d = $("keyDialog");
+    $("keyInput").value = "";
+    d.returnValue = "";
+    d.addEventListener("close", () => resolve(d.returnValue === "ok" ? $("keyInput").value.trim() : ""), { once: true });
+    d.showModal();
+  });
 }
 
 async function api(path, body) {
   const send = (key) => fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json", "X-Decide-Key": key }, body: JSON.stringify(body) } : undefined);
   let res = await send(storedKey());
   if (res.status === 403) {
-    const key = prompt("Approving or overriding needs the operator key.") || "";
+    const key = await askKey();
+    if (!key) throw new Error("Cancelled. Nothing changed.");
     try { sessionStorage.setItem("decideKey", key); } catch {}
-    if (key) res = await send(key);
+    res = await send(key);
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
 
-function show(error) { $("err").textContent = error ? error.message : ""; }
-
 async function submit(text) {
-  show(null);
-  $("go").disabled = true;
   followNext = true;
-  try { await api("/api/check", { text }); } catch (e) { followNext = false; show(e); }
-  setTimeout(() => ($("go").disabled = false), 800);
+  try {
+    await api("/api/check", { text });
+    showCase();
+  } catch (e) {
+    followNext = false;
+    toast(e.message, "bad");
+  }
 }
 
+/* The in tray */
 function renderPast() {
   const list = [...cases.values()].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
-  if (!list.length) {
-    $("past").innerHTML = `<p class="note">Nothing yet.</p>`;
-    return;
-  }
+  if (!list.length) { $("past").innerHTML = `<p class="fine">Nothing yet.</p>`; return; }
   $("past").innerHTML = list.map((c) => {
-    const v = c.verdict || (c.status === "failed" ? "BLOCK" : "WAIT");
-    const label = c.status === "failed" ? "FAILED" : c.verdict || "...";
-    return `<button class="past ${c.id === selected ? "sel" : ""}" data-id="${esc(c.id)}"><span class="chip ${v}">${label}</span><span class="who">${esc(c.vendor?.name || c.bill?.vendorName || c.preview)}</span></button>`;
+    const failed = c.status === "failed";
+    const v = failed ? "BLOCK" : c.verdict || "WAIT";
+    return `<button class="past ${c.id === selected ? "sel" : ""}" data-id="${esc(c.id)}"><span class="chip ${v}">${failed ? "NO PAY" : c.verdict || "..."}</span><span class="who">${esc(c.vendor?.name || c.bill?.vendorName || c.preview)}</span></button>`;
   }).join("");
 }
 
-// Each render rebuilds the list, so remember what is on screen and animate only what is new.
-const shown = { id: null, steps: 0, stamped: null };
-
-function renderLive(c) {
-  if (!c) return;
-  const seen = shown.id === c.id ? shown.steps : 0;
-  $("live").innerHTML = `<ol class="steps">${c.steps.map((s, i) => `<li class="${esc(s.state)} ${i >= seen ? "new" : ""}"><b>${esc(s.label)}</b><time>${clock(s.at)}</time><p>${esc(s.detail)}</p></li>`).join("")}</ol>`;
-  shown.id = c.id;
-  shown.steps = c.steps.length;
+/* The bill, marked up */
+function findRange(raw, needle) {
+  if (!needle) return null;
+  const i = raw.toLowerCase().indexOf(String(needle).toLowerCase());
+  return i < 0 ? null : [i, i + String(needle).length];
 }
 
-function evidenceHtml(c) {
-  const link = (u) => (/^https?:\/\//i.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>` : esc(u));
-  const pages = c.evidence.map((e) => `<div class="ev">${link(e.url)}<br>${e.official ? "Official page" : "Top search result, may be another company"}. sha256 ${esc(e.contentHash.slice(0, 24))}, fetched ${clock(e.fetchedAt)}</div>`).join("");
-  const plain = (q) => q.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
-  const claims = c.claims.map((k) => `<div class="ev">"${esc(plain(k.quote))}"<q>Claude's reading: ${esc(k.text)}</q></div>`).join("");
-  return pages || claims ? `<h2>Evidence</h2>${pages}${claims}` : "";
+const domainOf = (s) => (/<[^<>\s]*@([^<>\s]+)>\s*$/.exec((s || "").trim()) || /@([^\s<>,;"')]+)[^@]*$/.exec(s || "") || [])[1];
+
+// Wraps the letters a lookalike added or swapped, by comparing it with the real domain.
+function diffHtml(found, real) {
+  const a = found.toLowerCase(), b = (real || "").toLowerCase();
+  const dp = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  let i = 0, j = 0, out = "";
+  while (i < a.length) {
+    if (j < b.length && a[i] === b[j]) { out += esc(found[i]); i++; j++; }
+    else if (j < b.length && dp[i][j + 1] >= dp[i + 1][j]) { j++; }
+    else { out += `<u>${esc(found[i])}</u>`; i++; }
+  }
+  return out;
 }
 
-function renderRecord(c) {
-  if (!c) return;
-  if (c.status === "failed") {
-    $("record").innerHTML = `<div class="stampline"><div class="stamp BLOCK">NO PAY</div><div class="who-big"><b>Not checked</b><span class="note">${esc(c.error)}</span></div></div>`;
-    return;
+function marksFor(c) {
+  const raw = c.raw, b = c.bill || {}, ids = new Set(c.signals.map((s) => s.id)), out = [];
+  const add = (needle, tone, real) => {
+    const r = findRange(raw, needle);
+    if (r) out.push({ from: r[0], to: r[1], tone, real });
+  };
+  const sender = domainOf(b.fromEmail);
+  if (ids.has("lookalike")) add(sender, "bad", c.vendor?.domain);
+  else if (ids.has("sender_unlisted") || ids.has("new_domain")) add(sender, "bad");
+  if (ids.has("reply_to")) add(domainOf(b.replyTo), "bad");
+  if (ids.has("bank_changed") && b.bankLast4) add(b.bankLast4, "bad");
+  if (ids.has("phone_mismatch")) add(b.phone, "bad");
+  if (ids.has("urgency")) add(b.urgencyQuote, "warn");
+  const planted = /^.*\b(automated systems|ai assistant|ignore (all|your|previous))\b.*$/im.exec(raw);
+  if (planted) out.push({ from: planted.index, to: planted.index + planted[0].length, tone: "quiet" });
+  return out;
+}
+
+const TONE_RANK = { quiet: 1, warn: 2, bad: 3 };
+
+// Marks can overlap, as new bank digits do inside an urgent sentence, so each letter takes the strongest mark on it.
+function markedBill(c) {
+  if (!c.raw) return esc("This bill came in as a photo or PDF.");
+  if (!c.verdict) return esc(c.raw);
+  const tones = new Array(c.raw.length).fill("");
+  const lookalike = [];
+  for (const m of marksFor(c)) {
+    for (let i = m.from; i < m.to; i++) if ((TONE_RANK[m.tone] ?? 0) > (TONE_RANK[tones[i]] ?? 0)) tones[i] = m.tone;
+    if (m.real) lookalike.push(m);
   }
-  if (!c.verdict) {
-    $("record").innerHTML = `<p class="empty">Checking...</p>`;
-    return;
+  let html = "", i = 0;
+  while (i < c.raw.length) {
+    let end = i + 1;
+    while (end < c.raw.length && tones[end] === tones[i]) end++;
+    const m = lookalike.find((l) => l.from >= i && l.to <= end);
+    const run = m ? esc(c.raw.slice(i, m.from)) + diffHtml(c.raw.slice(m.from, m.to), m.real) + esc(c.raw.slice(m.to, end)) : esc(c.raw.slice(i, end));
+    html += tones[i] ? `<mark class="${tones[i]}">${run}</mark>` : run;
+    i = end;
   }
-  const pct = Math.min(c.score, 120) / 1.2;
-  const signals = c.signals.length
-    ? c.signals.map((s) => `<div class="sig"><span class="pts">+${s.points}</span><div><b>${esc(s.label)}</b><p>${esc(s.detail)}</p></div></div>`).join("")
-    : `<p class="note">No risk signals in what this bill shows.</p>`;
-  const refused = c.refused.map((r) => `<div class="refused"><b>Refused.</b> ${esc(r.text)} ${esc(r.reason)}.</div>`).join("");
-  const decided = c.decision ? `<p class="note">Decision: <b>${esc(c.decision.action.toUpperCase())}</b> by ${esc(c.decision.by)} at ${clock(c.decision.at)}. Signed.</p>` : "";
-  const options = c.verdict === "HOLD" ? ["approve", "reject"] : c.verdict === "BLOCK" ? ["reject", "override"] : [];
-  const buttons = c.decision ? "" : options.map((a) => `<button data-act="${a}">${a[0].toUpperCase() + a.slice(1)}</button>`).join("");
-  const k = c.crew;
-  const docs = (k?.documents ?? []).map((d) => `<div class="sig"><span class="pts ${d.verdict === "consistent" ? "PASS" : ""}">${d.verdict === "consistent" ? "OK" : "NO"}</span><div><b>${esc(d.name)}</b><p>${esc(d.verdict)}. ${esc(d.notes.join(" "))}</p></div></div>`).join("");
-  const offer = k?.offer ? `<div class="rec"><b>${k.offer.accepted ? `${esc(k.offer.discountPct)}% off, saving $${esc(k.offer.savings)}` : "No discount"}</b>${esc(k.offer.note)} Nothing is agreed until a person co-signs.</div>` : "";
-  const rec = k?.recommendation ? `<div class="rec"><b>Crew report</b>${esc(k.recommendation)}</div>` : "";
-  const haggle = k?.verified && !k.offer && !c.decision && k.phase === "awaiting_human" ? `<button data-negotiate="1">Ask for a discount</button>` : "";
-  const crewHtml = docs || rec || offer ? `<h2>Crew</h2>${docs}${rec}${offer}` : "";
-  const fresh = shown.stamped === c.id ? "" : "fresh";
-  shown.stamped = c.id;
-  $("record").innerHTML = `
-    <div class="stampline">
-      <div class="stamp ${c.verdict} ${fresh}">${c.verdict}</div>
-      <div class="who-big"><b>${esc(c.vendor?.name || c.bill?.vendorName || "Unknown vendor")}</b><span class="note">${c.bill?.amount ? "$" + esc(c.bill.amount) : ""} ${c.vendor ? `Trusted phone ${esc(c.vendor.phone)}` : ""}</span></div>
+  return html;
+}
+
+// The word hidden in safety paper. A dotted word in a dotted field, the way a real void pantograph is printed.
+function pantograph(c, reveal) {
+  const word = { PASS: "CLEAR", HOLD: "HOLD", BLOCK: "VOID" }[c.verdict];
+  if (!word) return "";
+  return `<svg class="panto ${c.verdict} ${reveal ? "reveal" : ""}" aria-hidden="true"><defs>
+    <pattern id="dotfill" width="2.6" height="2.6" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".85" fill="currentColor"/></pattern>
+    <pattern id="wordfill" width="${word.length * 62 + 44}" height="112" patternUnits="userSpaceOnUse" patternTransform="rotate(-22)">
+      <text x="8" y="84" font-family="Schibsted Grotesk, Arial, sans-serif" font-weight="700" font-size="88" letter-spacing="2" fill="url(#dotfill)">${word}</text>
+    </pattern></defs><rect width="100%" height="100%" fill="url(#wordfill)"/></svg>`;
+}
+
+function renderSheet(c) {
+  const key = `${c.id}:${c.verdict ?? ""}:${c.signals.length}`;
+  if (shown.sheet === key) return;
+  const reveal = Boolean(c.verdict) && shown.sheet !== key && shown.sheet.startsWith(`${c.id}:`);
+  shown.sheet = key;
+  const line = c.record ? `${c.id}  ${c.record.chainHash.slice(0, 20)}` : c.id;
+  $("sheet").innerHTML = `${pantograph(c, reveal)}<pre class="body">${markedBill(c)}</pre><div class="micr">${esc(line)}</div>`;
+}
+
+function renderHead(c) {
+  const failed = c.status === "failed";
+  const verdict = failed ? "NO PAY" : c.verdict || "Checking";
+  const name = c.vendor?.name || c.bill?.vendorName || (c.bill ? "Unknown vendor" : "Reading the bill");
+  const sub = [c.bill?.invoiceNumber && `Invoice ${c.bill.invoiceNumber}`, c.vendor && `Number on file ${c.vendor.phone}`, c.source === "iMessage" && "Texted in"].filter(Boolean).map((s) => `<span>${esc(s)}</span>`).join("");
+  const pct = (n) => `${(Math.min(n, SCALE) / SCALE) * 100}%`;
+  const railKey = `${c.id}:${c.verdict ?? ""}`;
+  const grow = c.verdict && shown.rail !== railKey && shown.rail.startsWith(`${c.id}:`);
+  shown.rail = railKey;
+  const parts = c.signals.map((s, i) => `<i class="${c.verdict}" style="width:${(s.points / SCALE) * 100}%;animation-delay:${i * 70}ms"></i>`).join("");
+  $("head").innerHTML = `
+    <div class="head">
+      <h1 class="verdict ${failed ? "BLOCK" : c.verdict || "WAIT"}">${verdict}</h1>
+      <div class="who-line"><b>${esc(name)}</b><div>${sub}</div></div>
+      <div class="amount">${esc(money(c.bill?.amount))}</div>
     </div>
-    <div class="meter" role="img" aria-label="Score ${c.score}"><i style="width:${pct}%"></i></div>
-    <div class="ticks"><span>PASS</span><span>HOLD at ${thresholds.hold}</span><span>BLOCK at ${thresholds.block}</span></div>
-    ${crewHtml}
-    <div class="acts">${buttons}${haggle}</div>
-    ${decided}
-    <h2>Why: ${c.score} points</h2>${signals}
-    ${evidenceHtml(c)}
-    ${refused}
-    <div class="acts"><button class="quiet" data-forge="1">Test the guardrail: forge a claim</button></div>
-    ${c.record ? `<h2>Signature</h2><p class="sigbox">${esc(c.record.signature)}<br>chain ${esc(c.record.chainHash)}</p>` : ""}`;
+    <div class="rail ${grow ? "grow" : ""}" role="img" aria-label="${c.score} risk points">${parts}</div>
+    <div class="ticks"><span style="left:${pct(thresholds.hold)}">HOLD ${thresholds.hold}</span><span style="left:${pct(thresholds.block)}">BLOCK ${thresholds.block}</span></div>`;
 }
 
-const PHASES = { investigating: "Investigator at work", awaiting_vendor: "Waiting on the vendor", examining: "Examiner reading", awaiting_human: "Waiting on a person", negotiating: "Negotiator waiting on the vendor", closed: "Closed" };
+function renderActions(c) {
+  const box = $("actions");
+  box.hidden = !c.verdict;
+  if (!c.verdict) return;
+  const fake = `<button class="quiet-btn" data-forge="1">Try to fake a source</button>`;
+  if (c.verdict === "PASS") { box.innerHTML = `<span class="decided">Nothing to decide. No risk signals in what this bill shows.</span>${fake}`; return; }
+  if (c.decision) {
+    const done = { approve: "Approved", reject: "Rejected", override: "Overridden" }[c.decision.action];
+    box.innerHTML = `<span class="decided">${done} by ${esc(c.decision.by)} at ${clock(c.decision.at)}. Signed.</span>${fake}`;
+    return;
+  }
+  const k = c.crew;
+  const rejectFirst = c.verdict === "BLOCK" || k?.recommendation?.startsWith("Reject");
+  const reject = `<button class="act ${rejectFirst ? "danger" : ""}" data-act="reject">Reject</button>`;
+  const yes = c.verdict === "BLOCK" ? `<button class="act" data-act="override">Override</button>` : `<button class="act ${rejectFirst ? "" : "main"}" data-act="approve">Approve</button>`;
+  const haggle = k?.verified && !k.offer && k.phase === "awaiting_human" ? `<button class="act" data-negotiate="1">Ask for a discount</button>` : "";
+  box.innerHTML = (rejectFirst ? reject + yes + haggle : yes + reject + haggle) + fake;
+}
 
-function renderVendor(c) {
+function renderReport(c) {
+  const k = c.crew;
+  const docs = (k?.documents ?? []).map((d) => `${esc(d.name[0].toUpperCase() + d.name.slice(1))}: ${esc(d.verdict)}. ${esc(d.notes.join(" "))}`);
+  const offer = k?.offer && (k.offer.accepted ? `${k.offer.discountPct}% off, saving ${money(k.offer.savings)}. Nothing is agreed until you co-sign.` : "No discount offered.");
+  const key = JSON.stringify([k?.recommendation, docs, offer]);
+  if ($("report").dataset.key === key) return;
+  $("report").dataset.key = key;
+  $("report").innerHTML = k?.recommendation
+    ? `<div class="report"><b>Crew report</b><p>${esc(k.recommendation)}</p>${docs.map((d) => `<small>${d}</small>`).join("")}${offer ? `<small>${esc(offer)}</small>` : ""}</div>`
+    : "";
+}
+
+function renderNotes(c) {
+  const key = `${c.id}:${c.verdict ?? ""}`;
+  const drop = c.verdict && shown.notes !== key && shown.notes.startsWith(`${c.id}:`);
+  shown.notes = key;
+  const list = $("notes");
+  list.className = `notes ${drop ? "drop" : ""}`;
+  if (!c.verdict) { list.innerHTML = ""; return; }
+  if (!c.signals.length) { list.innerHTML = `<h2>0 points</h2><div class="note"><b>Nothing flagged</b><p>The sender, bank and phone on this bill raised no signals.</p></div>`; return; }
+  const planted = c.raw && /\b(automated systems|ai assistant|ignore (all|your|previous))\b/i.test(c.raw)
+    ? `<div class="note machine" style="--i:${c.signals.length}"><b>Instruction for software<em>+0</em></b><p>This line tells software to approve the bill. It changed nothing.</p></div>`
+    : "";
+  list.innerHTML = `<h2>Why: ${c.score} points</h2>` + c.signals.map((s, i) => `<div class="note" style="--i:${i}"><b>${esc(s.label)}<em>+${s.points}</em></b><p>${esc(s.detail)}</p></div>`).join("") + planted;
+}
+
+function renderEvidence(c) {
+  const link = (u) => (/^https?:\/\//i.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>` : esc(u));
+  const plain = (q) => q.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+  const pages = c.evidence.map((e) => `<div class="ev">${link(e.url)}<small>${e.official ? "Official page" : "Top search result, may be another company"}. sha256 ${esc(e.contentHash.slice(0, 20))}, fetched ${clock(e.fetchedAt)}</small></div>`).join("");
+  const claims = c.claims.map((k) => `<div class="ev"><q>"${esc(plain(k.quote))}"</q><span>${esc(k.text)}</span></div>`).join("");
+  const refused = c.refused.map((r) => `<div class="refused"><b>Refused.</b> ${esc(r.text)} ${esc(r.reason)}.</div>`).join("");
+  if (!c.verdict) { $("evidence").innerHTML = ""; return; }
+  const key = c.evidence.length + ":" + c.claims.length + ":" + c.refused.length;
+  if ($("evidence").dataset.key === `${c.id}:${key}`) return;
+  $("evidence").dataset.key = `${c.id}:${key}`;
+  $("evidence").innerHTML = `<div class="block"><h2>What the crew read</h2>${refused}${pages}${claims}</div>`;
+}
+
+function renderAudit(c) {
+  $("auditBox").hidden = false;
+  $("trail").innerHTML = c.steps.map((s) => `<li><time>${clock(s.at)}</time><p><b>${esc(s.label)}.</b> ${esc(s.detail)}</p></li>`).join("");
+  $("sig").textContent = c.record ? `Ed25519 signature ${c.record.signature}  Chain ${c.record.chainHash}` : "";
+}
+
+/* The crew */
+const last = (c, label) => [...c.steps].reverse().find((s) => s.label === label);
+
+function plainStep(detail = "") {
+  const [tool, ...rest] = detail.split(": ");
+  const value = rest.join(": ");
+  if (tool === "web_search") return `Searching: ${value}`;
+  if (tool === "fetch_page") return `Reading ${value.replace(/^https?:\/\/(www\.)?/, "")}`;
+  if (tool === "domain_age") return `Checking when ${value} was registered`;
+  return detail;
+}
+
+function crewRows(c) {
+  const k = c.crew, passed = c.verdict === "PASS";
+  const rows = [];
+  const read = last(c, "Read the bill");
+  rows.push({ name: "Reader", kind: "Claude", state: read ? "done" : c.status === "failed" ? "bad" : "run", text: read ? "Read the bill" : "Reading the bill" });
+  rows.push({ name: "Gate", kind: "Code", state: c.record ? (passed ? "done" : c.verdict === "BLOCK" ? "bad" : "wait") : read ? "run" : "", text: c.record ? `${c.verdict} at ${c.score}, signed` : read ? "Checking sender, bank and phone" : "Rules, score, signature" });
+
+  const none = passed ? "Not needed" : "";
+  const invEnd = last(c, "Investigator finished"), invNow = last(c, "Investigator"), invFail = last(c, "Investigator failed");
+  rows.push({ name: "Investigator", kind: "Claude", state: invEnd ? "done" : invFail ? "bad" : k?.phase === "investigating" ? "run" : passed ? "off" : "", text: invEnd ? invEnd.detail : invFail ? "Could not finish" : k?.phase === "investigating" ? plainStep(invNow?.detail) || "Starting" : none || "Finds outside evidence" });
+
+  const noContact = last(c, "No trusted contact");
+  const liaisonEnd = last(c, "Liaison finished");
+  const waitingVendor = k?.phase === "awaiting_vendor";
+  const liaisonDone = liaisonEnd || last(c, "Examiner") || k?.phase === "awaiting_human" && !noContact && k.chat.length;
+  rows.push({ name: "Liaison", kind: "Claude", state: noContact ? "off" : liaisonDone ? "done" : waitingVendor ? "wait" : passed ? "off" : "", text: noContact ? "No trusted contact on file" : liaisonEnd ? liaisonEnd.detail.split(": ").slice(1).join(": ") : liaisonDone ? "Got the vendor's reply" : waitingVendor ? "Waiting on the vendor" : none || "Contacts the vendor on the trusted line" });
+
+  const examNow = last(c, "Examiner"), examEnd = last(c, "Examiner finished"), doc = k?.documents.at(-1);
+  rows.push({ name: "Examiner", kind: "Claude", state: examEnd ? (doc?.verdict === "consistent" ? "done" : "bad") : k?.phase === "examining" ? "run" : passed ? "off" : "off", text: examEnd ? `${doc?.name[0].toUpperCase()}${doc?.name.slice(1)}: ${doc?.verdict}` : k?.phase === "examining" ? `Reading ${examNow?.detail.replace("Reading ", "").replace(/\.$/, "")}` : none || "Reads what the vendor sends" });
+
+  const negEnd = last(c, "Negotiator finished");
+  rows.push({ name: "Negotiator", kind: "Claude", state: negEnd ? "done" : k?.phase === "negotiating" ? "wait" : "off", text: negEnd ? negEnd.detail : k?.phase === "negotiating" ? "Waiting on the vendor's answer" : none || "Only runs if you ask" });
+
+  rows.push({ name: "You", kind: "Person", state: c.decision ? "done" : k?.phase === "awaiting_human" ? "wait" : passed ? "off" : "", text: c.decision ? `${c.decision.action} signed` : k?.phase === "awaiting_human" ? "Your call" : none || "Nothing moves without you" });
+  return rows;
+}
+
+function renderCrew(c) {
+  const rows = c ? crewRows(c) : [
+    ["Reader", "Claude", "Reads the bill"], ["Gate", "Code", "Rules, score, signature"], ["Investigator", "Claude", "Finds outside evidence"],
+    ["Liaison", "Claude", "Contacts the vendor on the trusted line"], ["Examiner", "Claude", "Reads what the vendor sends"], ["Negotiator", "Claude", "Only runs if you ask"], ["You", "Person", "Nothing moves without you"],
+  ].map(([name, kind, text]) => ({ name, kind, text, state: "" }));
+  $("agents").innerHTML = rows.map((r) => `<div class="agent ${r.state}"><span class="dot"></span><b>${esc(r.name)}</b><em>${esc(r.kind)}</em><p>${esc(r.text)}</p></div>`).join("");
+  const asking = Boolean(c?.crew);
+  $("askForm").hidden = !asking;
+  if (!asking) $("answer").hidden = true;
+}
+
+function renderPhone(c) {
   const k = c?.crew;
-  $("vendorBox").hidden = !k;
-  if (!k) return;
-  $("vendorTitle").textContent = `${PHASES[k.phase]}. Vendor line: ${k.channel}`;
-  $("chat").innerHTML = k.chat.map((m) => `<div class="bubble ${m.from}"><small>${m.from === "agent" ? "Holdfast" : "Vendor"}</small>${esc(m.text)}</div>`).join("") || `<p class="note">No messages yet.</p>`;
-  $("vendorForm").hidden = !(["awaiting_vendor", "negotiating"].includes(k.phase) && k.channel === "the board");
+  const chat = k?.chat ?? [];
+  const key = c ? c.id : "";
+  const seen = shown.thread === key ? shown.threadCount : 0;
+  shown.thread = key;
+  shown.threadCount = chat.length;
+  const thinking = k && chat.at(-1)?.from === "vendor" && ["awaiting_vendor", "negotiating", "examining"].includes(k.phase);
+  const body = chat.map((m, i) => `<div class="msg ${m.from === "agent" ? "them" : "me"} ${m.file ? "file" : ""} ${i >= seen ? "new" : ""}">${m.file ? `<span aria-hidden="true">PDF</span> ${esc(m.file)}` : esc(m.text)}</div>`).join("");
+  $("thread").innerHTML = body + (thinking ? `<div class="msg them new dots" aria-label="Holdfast is reading"><i></i><i></i><i></i></div>` : "") || `<p class="nothing">${c?.verdict === "PASS" ? "This bill passed, so the vendor isn't contacted." : "When a bill is flagged, the agent texts the vendor here, on the number we already trust."}</p>`;
+  $("thread").scrollTop = $("thread").scrollHeight;
+  $("line").textContent = k?.channel === "iMessage" ? "Vendor's phone, live" : "Vendor's phone, stand-in";
+  $("compose").hidden = !(k && ["awaiting_vendor", "negotiating"].includes(k.phase) && k.channel === "the board");
+}
+
+function renderEmpty() {
+  $("head").innerHTML = `<div class="head"><h1 class="verdict WAIT">Pick a bill</h1></div>`;
+  $("papers").classList.add("open");
+  $("actions").hidden = true;
+  $("report").innerHTML = "";
+  $("notes").innerHTML = "";
+  $("evidence").innerHTML = "";
+  $("auditBox").hidden = true;
+  shown.sheet = "";
+  $("sheet").innerHTML = `<div class="blank"><div><strong>$3.05B in reported business email compromise losses in 2025.</strong>Source: FBI Internet Crime Report.</div></div>`;
 }
 
 function render() {
   renderPast();
   const c = cases.get(selected);
-  renderVendor(c);
-  if (!c) {
-    $("live").innerHTML = `<p class="empty">Pick a bill to watch the check run.</p>`;
-    $("record").innerHTML = `<p class="empty">The verdict, the evidence and the signature show up here.</p>`;
-    return;
-  }
-  renderLive(c);
-  renderRecord(c);
+  renderCrew(c);
+  renderPhone(c);
+  if (!c) return renderEmpty();
+  $("papers").classList.remove("open");
+  renderHead(c);
+  renderActions(c);
+  renderReport(c);
+  renderSheet(c);
+  renderNotes(c);
+  renderEvidence(c);
+  renderAudit(c);
 }
 
 function upsert(c) {
@@ -314,43 +683,55 @@ function connect() {
 $("go").onclick = () => submit($("paste").value);
 $("demos").onclick = (e) => {
   const b = e.target.closest("[data-bill]");
-  if (!b) return;
-  const bill = demoBills.find((x) => x.id === b.dataset.bill);
-  $("paste").value = bill.text;
-  submit(bill.text);
+  if (b) submit(demoBills.find((x) => x.id === b.dataset.bill).text);
 };
 $("past").onclick = (e) => {
   const b = e.target.closest("[data-id]");
-  if (b) { selected = b.dataset.id; location.hash = selected; render(); }
+  if (!b) return;
+  selected = b.dataset.id;
+  location.hash = selected;
+  render();
+  showCase();
 };
-$("record").onclick = async (e) => {
+// On a phone the case sits below the in tray, so bring it into view.
+function showCase() {
+  if (matchMedia("(max-width: 760px)").matches) document.querySelector(".case").scrollIntoView({ block: "start" });
+}
+$("actions").onclick = async (e) => {
+  const t = e.target.closest("button");
+  if (!t) return;
   try {
-    if (e.target.dataset.act) upsert(await api(`/api/cases/${selected}/decide`, { action: e.target.dataset.act }));
-    if (e.target.dataset.forge) upsert(await api(`/api/cases/${selected}/forge`, {}));
-    if (e.target.dataset.negotiate) await api(`/api/cases/${selected}/negotiate`, {});
-  } catch (err) { show(err); }
-};
-$("vendorForm").onsubmit = async (e) => {
-  e.preventDefault();
-  const text = $("vendorText").value.trim();
-  if (!text) return;
-  $("vendorText").value = "";
-  try { await api(`/api/cases/${selected}/vendor`, { text }); } catch (err) { show(err); }
+    if (t.dataset.act) upsert(await api(`/api/cases/${selected}/decide`, { action: t.dataset.act }));
+    if (t.dataset.negotiate) await api(`/api/cases/${selected}/negotiate`, {});
+    if (t.dataset.forge) {
+      upsert(await api(`/api/cases/${selected}/forge`, {}));
+      toast("Refused. That page was never fetched, so the claim can't be used.", "bad");
+    }
+  } catch (err) { toast(err.message, "bad"); }
 };
 $("askForm").onsubmit = async (e) => {
   e.preventDefault();
   const question = $("askText").value.trim();
   if (!question) return;
-  $("askAnswer").textContent = "Reading the record...";
+  $("answer").hidden = false;
+  $("answer").textContent = "Reading the record...";
   try {
     const { answer } = await api(`/api/cases/${selected}/ask`, { question });
-    $("askAnswer").textContent = answer;
+    $("answer").textContent = answer;
+    $("askText").value = "";
   } catch (err) {
-    $("askAnswer").textContent = "";
-    show(err);
+    $("answer").hidden = true;
+    toast(err.message, "bad");
   }
 };
-$("vendorForm").onclick = async (e) => {
+$("compose").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $("vendorText").value.trim();
+  if (!text) return;
+  $("vendorText").value = "";
+  try { await api(`/api/cases/${selected}/vendor`, { text }); } catch (err) { toast(err.message, "bad"); }
+};
+$("compose").onclick = async (e) => {
   const name = e.target.dataset.letter;
   if (!name) return;
   try {
@@ -358,30 +739,30 @@ $("vendorForm").onclick = async (e) => {
     let binary = "";
     for (const b of bytes) binary += String.fromCharCode(b);
     await api(`/api/cases/${selected}/vendor`, { file: { name, mediaType: "application/pdf", base64: btoa(binary) } });
-  } catch (err) { show(err); }
+  } catch (err) { toast(err.message, "bad"); }
 };
 
 async function lights() {
   const s = await api("/api/status");
   thresholds = s.thresholds;
-  const l = (name, on) => `<span class="light ${on ? "on" : "off"}">${name}</span>`;
-  $("lights").innerHTML = l("Claude", s.claude) + l("Firecrawl", s.firecrawl) + l("iMessage", s.imessage) + l(s.chainBrokenAt ? "chain broken" : `chain ${s.chainLength}`, !s.chainBrokenAt);
+  const l = (name, on) => `<span class="light ${on ? "on" : "off"}"><i></i>${name}</span>`;
+  $("lights").innerHTML = l("Claude", s.claude) + l("Firecrawl", s.firecrawl) + l("iMessage", s.imessage) + l(s.chainBrokenAt ? "Chain broken" : `Chain ${s.chainLength}`, !s.chainBrokenAt);
 }
 
 async function start() {
   demoBills = await api("/api/demo");
-  $("demos").innerHTML = demoBills.map((b) => `<button class="bill" data-bill="${esc(b.id)}"><b>${esc(b.title)}</b><span>${esc(b.note)}</span></button>`).join("");
+  $("demos").innerHTML = demoBills.map((b) => `<button class="bill-btn" data-bill="${esc(b.id)}"><b>${esc(b.title)}</b><span>${esc(b.note)}</span></button>`).join("");
   await resync();
   lights();
   const e = await api("/api/eval");
-  $("eval").textContent = `Rules test: caught ${e.caught} of ${e.fraud} fraud bills, ${e.falseAlarms} false alarms on ${e.clean} clean bills. We wrote these ${e.fraud + e.clean} bills ourselves.`;
+  $("eval").textContent = `Rules test: caught ${e.caught} of ${e.fraud} fraud bills, with ${e.falseAlarms} false alarms on ${e.clean} clean ones. We wrote these ${e.fraud + e.clean} bills ourselves.`;
   connect();
   setInterval(() => {
     lights().catch(() => {});
     resync().catch(() => {});
   }, 60_000);
 }
-start().catch(show);
+start().catch((e) => toast(e.message, "bad"));
 </script>
 </body>
 </html>
