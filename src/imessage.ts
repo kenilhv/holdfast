@@ -36,6 +36,22 @@ export function unwrap(content: any): any {
   return content;
 }
 
+// Typing dots are a courtesy. Some recipients cannot show them, and that must never stop the work behind them.
+export async function withTyping(space: any, work: () => Promise<void>) {
+  let started = false;
+  const run = async () => {
+    started = true;
+    await work();
+  };
+  try {
+    await space.responding(run);
+  } catch (e) {
+    if (started) throw e;
+    console.log(`iMessage: no typing dots: ${(e as Error).message}`);
+    await run();
+  }
+}
+
 export async function startImessage(d: { engine: Engine; baseUrl: string; spend: (who: string) => void }) {
   const off = { on: false, notify: async (_text: string, _caseId?: string) => {} };
   const projectId = process.env.SPECTRUM_PROJECT_ID;
@@ -77,7 +93,7 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
       await space.send("You have reached the hourly limit for checks. Try again later.");
       return;
     }
-    await space.responding(async () => {
+    await withTyping(space, async () => {
       const c = await d.engine.run(doc, "iMessage");
       console.log(`iMessage: ${c.id} ${c.status} ${c.verdict ?? c.error}`);
       if (c.status === "done" && c.verdict !== "PASS") addOpen(String(space.id), c.id);

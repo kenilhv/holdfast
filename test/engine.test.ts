@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createEventLog } from "../src/eventlog.ts";
-import { parseCommand, unwrap } from "../src/imessage.ts";
+import { parseCommand, unwrap, withTyping } from "../src/imessage.ts";
 import { createEngine, groundFields, senderLines, summary, worstSender, type Case } from "../src/pipeline.ts";
 import { emailDomain, evaluate, phoneDigits, scoreOf, verdictFor, type BillFields, type Vendor } from "../src/rules.ts";
 import { createSigner } from "../src/signing.ts";
@@ -170,6 +170,20 @@ test("a swipe reply and a captioned photo are unwrapped", () => {
   const photo = { type: "attachment", mimeType: "image/png" };
   const caption = { type: "text", text: "is this real" };
   assert.equal(unwrap({ type: "group", items: [{ content: caption }, { content: photo }] }), photo);
+});
+
+test("a recipient who cannot show typing dots still gets the work done", async () => {
+  let runs = 0;
+  const noTyping = { responding: async () => { throw new Error("Typing requires iMessage"); } };
+  await withTyping(noTyping, async () => { runs++; });
+  assert.equal(runs, 1);
+});
+
+test("a failure inside the work is not run twice", async () => {
+  let runs = 0;
+  const space = { responding: async (fn: () => Promise<void>) => fn() };
+  await assert.rejects(withTyping(space, async () => { runs++; throw new Error("send failed"); }));
+  assert.equal(runs, 1);
 });
 
 test("forging twice records one refusal", () => {
