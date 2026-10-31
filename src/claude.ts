@@ -5,15 +5,20 @@ import type { Claim, Page } from "./web.ts";
 
 export type DocInput = { kind: "text"; text: string } | { kind: "file"; mediaType: string; base64: string };
 
-const MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
+export const MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
 const PAGE_LIMIT = 12_000;
 
-function client() {
+export function client() {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, baseURL: "https://api.anthropic.com" });
 }
 
-async function askJson<T>(system: string, content: Anthropic.ContentBlockParam[], schema: object): Promise<T> {
+export const fileBlock = (mediaType: string, base64: string) =>
+  mediaType === "application/pdf"
+    ? { type: "document", source: { type: "base64", media_type: mediaType, data: base64 } }
+    : { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
+
+export async function askJson<T>(system: string, content: any[], schema: object): Promise<T> {
   const res: any = await client().beta.messages.create({
     model: MODEL,
     max_tokens: 8000,
@@ -57,12 +62,7 @@ export async function extractBill(doc: DocInput): Promise<BillFields> {
   const content: any[] =
     doc.kind === "text"
       ? [{ type: "text", text: `<document>\n${doc.text}\n</document>` }]
-      : [
-          doc.mediaType === "application/pdf"
-            ? { type: "document", source: { type: "base64", media_type: doc.mediaType, data: doc.base64 } }
-            : { type: "image", source: { type: "base64", media_type: doc.mediaType, data: doc.base64 } },
-          { type: "text", text: "Read this vendor document." },
-        ];
+      : [fileBlock(doc.mediaType, doc.base64), { type: "text", text: "Read this vendor document." }];
   return askJson<BillFields>(READ_SYSTEM, content, BILL_SCHEMA);
 }
 

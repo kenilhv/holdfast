@@ -1,7 +1,18 @@
-// The iMessage agent. Text it a vendor email or a photo of an invoice and it replies with the verdict.
+// The iMessage line. People text it bills and questions, and the vendor's phone reaches the crew through it.
+import type { Crew } from "./crew.ts";
 import { billCode, summary, type Action, type Engine } from "./pipeline.ts";
+import { phoneDigits } from "./rules.ts";
 
-const COMMANDS: Record<string, Action> = { approve: "approve", approved: "approve", reject: "reject", rejected: "reject", override: "override" };
+export type Command = Action | "negotiate";
+
+const COMMANDS: Record<string, Command> = {
+  approve: "approve",
+  approved: "approve",
+  reject: "reject",
+  rejected: "reject",
+  override: "override",
+  negotiate: "negotiate",
+};
 const HELP = "Send me a vendor's email, or a photo or PDF of an invoice, and I will check who is really getting paid before you pay.";
 const LOOKS_LIKE_A_BILL = /@|invoice|remit|bank|routing|account|payment|\$\s?\d/i;
 const FILE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"]);
@@ -16,8 +27,8 @@ async function toBase64(data: any): Promise<string> {
 const masked = (id: string) => `...${id.slice(-4)}`;
 
 // "REJECT", or "reject 3f2a" to name one of several open bills.
-export function parseCommand(text: string): { action: Action; code?: string } | null {
-  const m = /^\s*(approved?|reject(?:ed)?|override)\b\W*([0-9a-f]{4})?\W*$/i.exec(text);
+export function parseCommand(text: string): { action: Command; code?: string } | null {
+  const m = /^\s*(approved?|reject(?:ed)?|override|negotiate)\b\W*([0-9a-f]{4})?\W*$/i.exec(text);
   return m ? { action: COMMANDS[m[1].toLowerCase()], code: m[2]?.toLowerCase() } : null;
 }
 
@@ -52,12 +63,12 @@ export async function withTyping(space: any, work: () => Promise<void>) {
   }
 }
 
-export async function startImessage(d: { engine: Engine; baseUrl: string; spend: (who: string) => void }) {
-  const off = { on: false, notify: async (_text: string, _caseId?: string) => {} };
+export async function startImessage(d: { engine: Engine; baseUrl: string; spend: (who: string) => void; crew: () => Crew | undefined }) {
+  const off = { on: false, notify: async (_text: string, _caseId?: string) => {}, sendVendor: async (_text: string) => {} };
   const projectId = process.env.SPECTRUM_PROJECT_ID;
   const projectSecret = process.env.SPECTRUM_PROJECT_SECRET;
-  if (!projectId || !projectSecret) {
-    console.log("iMessage is off: set SPECTRUM_PROJECT_ID and SPECTRUM_PROJECT_SECRET.");
+  if (process.env.IMESSAGE === "off" || !projectId || !projectSecret) {
+    console.log("iMessage is off.");
     return off;
   }
 
@@ -68,21 +79,31 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
   // The flagged bills waiting on each conversation. A conversation can only reach its own bills,
   // and flagged bills from the board go only to CONTROLLER_PHONE, so a stranger can never decide someone else's.
   const openCases = new Map<string, string[]>();
+  const caseSpace = new Map<string, any>();
+  const vendorPhone = phoneDigits(process.env.DEMO_VENDOR_PHONE ?? "");
   let controller: any;
+  let vendorSpace: any;
 
-  const addOpen = (key: string, id: string) => openCases.set(key, [...(openCases.get(key) ?? []), id]);
+  const addOpen = (key: string, id: string) => {
+    const list = openCases.get(key) ?? [];
+    if (!list.includes(id)) openCases.set(key, [...list, id]);
+  };
   const waiting = (key: string) => (openCases.get(key) ?? []).filter((id) => !d.engine.get(id)?.decision);
   const vendorOf = (id: string) => {
     const c = d.engine.get(id);
     return c?.vendor?.name ?? c?.bill?.vendorName ?? "this vendor";
   };
 
+  async function spaceFor(phone: string) {
+    const im = imessage(app);
+    return im.space.create(await im.user(phone));
+  }
+
   async function controllerSpace() {
     if (controller) return controller;
     const phone = process.env.CONTROLLER_PHONE;
     if (!phone) return undefined;
-    const im = imessage(app);
-    controller = await im.space.create(await im.user(phone));
+    controller = await spaceFor(phone);
     return controller;
   }
 
@@ -96,12 +117,13 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
     await withTyping(space, async () => {
       const c = await d.engine.run(doc, "iMessage");
       console.log(`iMessage: ${c.id} ${c.status} ${c.verdict ?? c.error}`);
+      caseSpace.set(c.id, space);
       if (c.status === "done" && c.verdict !== "PASS") addOpen(String(space.id), c.id);
       await space.send(summary(c, d.baseUrl));
     });
   }
 
-  async function decide(space: any, who: string, action: Action, code?: string) {
+  async function decide(space: any, who: string, action: Command, code?: string) {
     const open = waiting(String(space.id));
     if (!open.length) return space.send("There is no bill waiting for a decision here.");
     const id = code ? open.find((c) => billCode(c) === code) : open.length === 1 ? open[0] : undefined;
@@ -110,10 +132,28 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
       return space.send(`Which bill? Reply like "${action.toUpperCase()} ${billCode(open[0])}".\n${list}`);
     }
     try {
+      if (action === "negotiate") {
+        await d.crew()?.negotiate(d.engine.get(id)!);
+        return space.send(`Asking ${vendorOf(id)} now. I will text you what they say.`);
+      }
       d.engine.decide(id, action, `iMessage ${masked(who)}`);
       return space.send(action === "reject" ? `Rejected ${vendorOf(id)}. Nothing gets paid.` : `Recorded ${action} for ${vendorOf(id)}. Your decision is signed on the record.`);
     } catch (e) {
-      return space.send(`I could not record that: ${(e as Error).message}.`);
+      return space.send(`I could not do that: ${(e as Error).message}.`);
+    }
+  }
+
+  async function fromVendorPhone(space: any, content: any) {
+    vendorSpace = space;
+    const c = d.crew()?.waitingOnVendor();
+    if (!c) return void (await space.send("Thanks, there is nothing we need from you right now."));
+    if (content.type === "attachment") {
+      if (!FILE_TYPES.has(content.mimeType)) return void (await space.send("Please send a PDF, or a screenshot of the document."));
+      const base64 = await toBase64(await content.read());
+      if (base64.length > MAX_FILE_BASE64) return void (await space.send("That file is too big. Please send a smaller one."));
+      await d.crew()?.fromVendor(c, { file: { name: content.name ?? "document", mediaType: content.mimeType, base64 } });
+    } else if (content.type === "text") {
+      await d.crew()?.fromVendor(c, { text: String(content.text) });
     }
   }
 
@@ -121,6 +161,7 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
     const who = String(message.sender?.id ?? "unknown");
     const content = unwrap(message.content);
     console.log(`iMessage in: ${message.content?.type} from ${masked(who)}`);
+    if (vendorPhone && phoneDigits(who) === vendorPhone) return fromVendorPhone(space, content);
 
     if (content.type === "attachment") {
       if (/hei[cf]/i.test(content.mimeType ?? "")) return void (await space.send("I can't read iPhone HEIC photos yet. Take a screenshot of it and send that."));
@@ -138,6 +179,20 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
     const text = String(content.text).trim();
     const command = parseCommand(text);
     if (command) return void (await decide(space, who, command.action, command.code));
+    if (text.length >= 30 && LOOKS_LIKE_A_BILL.test(text) && text.includes("\n")) return check(space, who, { kind: "text", text });
+
+    // A question about the bill in this conversation goes to the Controller.
+    const open = waiting(String(space.id)).at(-1);
+    if (open && d.crew()) {
+      try {
+        d.spend(who);
+        return void (await withTyping(space, async () => {
+          await space.send(await d.crew()!.ask(d.engine.get(open)!, text));
+        }));
+      } catch (e) {
+        console.error(`iMessage question: ${(e as Error).message}`);
+      }
+    }
     if (text.length >= 30 && LOOKS_LIKE_A_BILL.test(text)) return check(space, who, { kind: "text", text });
     await space.send(HELP);
   }
@@ -154,10 +209,14 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
   return {
     on: true,
     async notify(text: string, caseId?: string) {
-      const space = await controllerSpace();
+      const space = (caseId && caseSpace.get(caseId)) || (await controllerSpace());
       if (!space) return;
       if (caseId) addOpen(String(space.id), caseId);
       await space.send(text);
+    },
+    async sendVendor(text: string) {
+      vendorSpace ??= await spaceFor(process.env.DEMO_VENDOR_PHONE ?? "");
+      await vendorSpace.send(text);
     },
   };
 }

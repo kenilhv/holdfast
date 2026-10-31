@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createCrew, type Crew } from "./crew.ts";
 import { DEMO_BILLS } from "./demo-bills.ts";
 import { runEval } from "./eval.ts";
 import { createEventLog } from "./eventlog.ts";
@@ -30,16 +31,27 @@ const events = createEventLog(join(process.env.DATA_DIR ?? join(tmpdir(), "holdf
 const signer = createSigner(process.env.SIGNING_KEY_PEM || undefined);
 
 let chat: Awaited<ReturnType<typeof startImessage>> | undefined;
+let crew: Crew | undefined;
 const engine = createEngine({
   events,
   signer,
   vendors,
   onFlag(c: Case) {
     if (c.source !== "iMessage") chat?.notify(summary(c, baseUrl), c.id).catch((e: Error) => console.error(`notify: ${e.message}`));
+    crew?.start(c).catch((e: Error) => console.error(`crew: ${e.message}`));
   },
+});
+crew = createCrew({
+  engine,
+  vendors,
+  baseUrl,
+  // Only a phone set for the demo can ever be texted as the vendor, so a real company is never contacted.
+  vendorLine: { on: () => Boolean(chat?.on && process.env.DEMO_VENDOR_PHONE), send: (text) => chat!.sendVendor(text) },
+  human: { send: (text, caseId) => chat?.notify(text, caseId) ?? Promise.resolve() },
 });
 
 const BODY_LIMIT = 256 * 1024;
+const FILE_BODY_LIMIT = 8 * 1024 * 1024;
 const TEXT_LIMIT = 30_000;
 const CHECKS_PER_HOUR = Number(process.env.MAX_CHECKS_PER_HOUR ?? 60);
 const CHECKS_PER_CLIENT = 10;
@@ -64,12 +76,12 @@ function send(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-async function readJson(req: IncomingMessage): Promise<any> {
+async function readJson(req: IncomingMessage, limit = BODY_LIMIT): Promise<any> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > BODY_LIMIT) throw new HttpError(413, "body too large");
+    if (size > limit) throw new HttpError(413, "body too large");
     chunks.push(chunk);
   }
   try {
@@ -137,6 +149,11 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
       return res.end(readFileSync(`${root}public/index.html`));
     }
+    const sample = /^\/demo\/([a-z-]+\.pdf)$/.exec(path);
+    if (req.method === "GET" && sample) {
+      res.writeHead(200, { "Content-Type": "application/pdf" });
+      return res.end(readFileSync(`${root}public/demo/${sample[1]}`));
+    }
     if (req.method === "GET" && path === "/api/status") return send(res, 200, status());
     if (req.method === "GET" && path === "/api/demo") return send(res, 200, DEMO_BILLS);
     if (req.method === "GET" && path === "/api/eval") return send(res, 200, runEval());
@@ -153,10 +170,34 @@ const server = createServer(async (req, res) => {
       return send(res, 202, { accepted: true });
     }
 
-    const m = /^\/api\/cases\/(c_[0-9a-f]+)(?:\/(decide|forge|verify))?$/.exec(path);
+    const m = /^\/api\/cases\/(c_[0-9a-f]+)(?:\/(decide|forge|verify|vendor|negotiate))?$/.exec(path);
     if (m) {
       const [, id, part] = m;
       if (!engine.get(id)) throw new HttpError(404, "no such case");
+      if (req.method === "POST" && part === "vendor") {
+        // The stand-in for a vendor's phone. It is closed when a real phone is set.
+        if (process.env.DEMO_VENDOR_PHONE && chat?.on) throw new HttpError(409, "the vendor is on a real phone for this demo");
+        const { text, file } = await readJson(req, FILE_BODY_LIMIT);
+        spendCheck(clientOf(req));
+        const message = file ? { file: { name: String(file.name).slice(0, 80), mediaType: String(file.mediaType), base64: String(file.base64) } } : { text: String(text ?? "").slice(0, 2000) };
+        if (!message.file && !message.text) throw new HttpError(400, "send text or a file");
+        if (message.file && !["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"].includes(message.file.mediaType)) throw new HttpError(400, "send a PDF or an image");
+        try {
+          void crew?.fromVendor(engine.get(id)!, message);
+        } catch (e) {
+          throw new HttpError(409, (e as Error).message);
+        }
+        return send(res, 202, { accepted: true });
+      }
+      if (req.method === "POST" && part === "negotiate") {
+        if (!DECIDE_KEY || req.headers["x-decide-key"] !== DECIDE_KEY) throw new HttpError(403, "this decision needs the operator key");
+        try {
+          void crew?.negotiate(engine.get(id)!);
+        } catch (e) {
+          throw new HttpError(409, (e as Error).message);
+        }
+        return send(res, 202, { accepted: true });
+      }
       if (req.method === "GET" && !part) return send(res, 200, engine.get(id));
       if (req.method === "GET" && part === "verify") return send(res, 200, engine.verify(id));
       if (req.method === "POST" && part === "forge") return send(res, 200, engine.forge(id));
@@ -186,7 +227,7 @@ server.listen(port, () => {
   if (process.env.FIRECRAWL_API_KEY) {
     for (const v of vendors) fetchPage(v.contactUrl).catch((e: Error) => console.error(`warm ${v.id}: ${e.message}`));
   }
-  startImessage({ engine, baseUrl, spend: (who) => spendCheck(`imessage:${who}`) })
+  startImessage({ engine, baseUrl, spend: (who) => spendCheck(`imessage:${who}`), crew: () => crew })
     .then((c) => (chat = c))
     .catch((e: Error) => console.error(`iMessage failed to start: ${e.message}`));
   // Render's free tier sleeps after 15 quiet minutes, and a sleeping agent loses texts, so the service calls itself.

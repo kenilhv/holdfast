@@ -76,6 +76,16 @@ textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); ou
 .acts button:hover { background: var(--ink); color: var(--paper); }
 .acts .quiet { border-color: var(--line); color: var(--soft); }
 .sigbox { font: 11px/1.45 var(--mono); color: var(--soft); overflow-wrap: anywhere; }
+.bubble { max-width: 86%; padding: 8px 11px; margin: 6px 0; font-size: 14px; overflow-wrap: anywhere; animation: rise .2s ease-out both; }
+.bubble.agent { background: var(--ink); color: var(--paper); margin-left: auto; }
+.bubble.vendor { background: var(--card); border: 1px solid var(--line); }
+.bubble small { display: block; opacity: .7; font: 10.5px var(--mono); margin-bottom: 2px; }
+#vendorForm { margin-top: 10px; }
+#vendorForm .row { display: flex; gap: 8px; }
+#vendorText { flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line); padding: 8px 10px; font: inherit; color: inherit; }
+#vendorForm button { background: none; border: 1px solid var(--ink); padding: 8px 12px; font-weight: 500; cursor: pointer; }
+.rec { background: var(--card); border-left: 3px solid var(--ink); padding: 9px 12px; margin-top: 8px; }
+.rec b { display: block; font-weight: 600; }
 @media (max-width: 1100px) { main { grid-template-columns: 1fr; } section { border-right: 0; border-bottom: 1px solid var(--line); padding: 18px 16px; } header { padding: 16px; } .lights { margin-left: 0; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
@@ -100,6 +110,21 @@ textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); ou
   <section aria-live="polite">
     <h2>Live check</h2>
     <div id="live"><p class="empty">Pick a bill to watch the check run.</p></div>
+    <div id="vendorBox" hidden>
+      <h2 id="vendorTitle">Vendor conversation</h2>
+      <div id="chat"></div>
+      <form id="vendorForm" hidden>
+        <p class="note">Stand-in for the vendor's phone.</p>
+        <div class="row">
+          <input id="vendorText" aria-label="Reply as the vendor" placeholder="Reply as the vendor" autocomplete="off">
+          <button>Send</button>
+        </div>
+        <div class="acts">
+          <button type="button" data-letter="bank-letter-match.pdf">Send matching letter</button>
+          <button type="button" data-letter="bank-letter-wrong.pdf">Send wrong letter</button>
+        </div>
+      </form>
+    </div>
   </section>
   <section>
     <h2>Signed record</h2>
@@ -194,6 +219,12 @@ function renderRecord(c) {
   const decided = c.decision ? `<p class="note">Decision: <b>${esc(c.decision.action.toUpperCase())}</b> by ${esc(c.decision.by)} at ${clock(c.decision.at)}. Signed.</p>` : "";
   const options = c.verdict === "HOLD" ? ["approve", "reject"] : c.verdict === "BLOCK" ? ["reject", "override"] : [];
   const buttons = c.decision ? "" : options.map((a) => `<button data-act="${a}">${a[0].toUpperCase() + a.slice(1)}</button>`).join("");
+  const k = c.crew;
+  const docs = (k?.documents ?? []).map((d) => `<div class="sig"><span class="pts ${d.verdict === "consistent" ? "PASS" : ""}">${d.verdict === "consistent" ? "OK" : "NO"}</span><div><b>${esc(d.name)}</b><p>${esc(d.verdict)}. ${esc(d.notes.join(" "))}</p></div></div>`).join("");
+  const offer = k?.offer ? `<div class="rec"><b>${k.offer.accepted ? `${esc(k.offer.discountPct)}% off, saving $${esc(k.offer.savings)}` : "No discount"}</b>${esc(k.offer.note)} Nothing is agreed until a person co-signs.</div>` : "";
+  const rec = k?.recommendation ? `<div class="rec"><b>Crew report</b>${esc(k.recommendation)}</div>` : "";
+  const haggle = k?.verified && !k.offer && !c.decision && k.phase === "awaiting_human" ? `<button data-negotiate="1">Ask for a discount</button>` : "";
+  const crewHtml = docs || rec || offer ? `<h2>Crew</h2>${docs}${rec}${offer}` : "";
   const fresh = shown.stamped === c.id ? "" : "fresh";
   shown.stamped = c.id;
   $("record").innerHTML = `
@@ -203,16 +234,31 @@ function renderRecord(c) {
     </div>
     <div class="meter" role="img" aria-label="Score ${c.score}"><i style="width:${pct}%"></i></div>
     <div class="ticks"><span>PASS</span><span>HOLD at ${thresholds.hold}</span><span>BLOCK at ${thresholds.block}</span></div>
+    ${crewHtml}
+    <div class="acts">${buttons}${haggle}</div>
+    ${decided}
     <h2>Why: ${c.score} points</h2>${signals}
     ${evidenceHtml(c)}
-    ${decided}${refused}
-    <div class="acts">${buttons}<button class="quiet" data-forge="1">Test the guardrail: forge a claim</button></div>
+    ${refused}
+    <div class="acts"><button class="quiet" data-forge="1">Test the guardrail: forge a claim</button></div>
     ${c.record ? `<h2>Signature</h2><p class="sigbox">${esc(c.record.signature)}<br>chain ${esc(c.record.chainHash)}</p>` : ""}`;
+}
+
+const PHASES = { investigating: "Investigator at work", awaiting_vendor: "Waiting on the vendor", examining: "Examiner reading", awaiting_human: "Waiting on a person", negotiating: "Negotiator waiting on the vendor", closed: "Closed" };
+
+function renderVendor(c) {
+  const k = c?.crew;
+  $("vendorBox").hidden = !k;
+  if (!k) return;
+  $("vendorTitle").textContent = `${PHASES[k.phase]}. Vendor line: ${k.channel}`;
+  $("chat").innerHTML = k.chat.map((m) => `<div class="bubble ${m.from}"><small>${m.from === "agent" ? "Holdfast" : "Vendor"}</small>${esc(m.text)}</div>`).join("") || `<p class="note">No messages yet.</p>`;
+  $("vendorForm").hidden = !(["awaiting_vendor", "negotiating"].includes(k.phase) && k.channel === "the board");
 }
 
 function render() {
   renderPast();
   const c = cases.get(selected);
+  renderVendor(c);
   if (!c) {
     $("live").innerHTML = `<p class="empty">Pick a bill to watch the check run.</p>`;
     $("record").innerHTML = `<p class="empty">The verdict, the evidence and the signature show up here.</p>`;
@@ -272,6 +318,24 @@ $("record").onclick = async (e) => {
   try {
     if (e.target.dataset.act) upsert(await api(`/api/cases/${selected}/decide`, { action: e.target.dataset.act }));
     if (e.target.dataset.forge) upsert(await api(`/api/cases/${selected}/forge`, {}));
+    if (e.target.dataset.negotiate) await api(`/api/cases/${selected}/negotiate`, {});
+  } catch (err) { show(err); }
+};
+$("vendorForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $("vendorText").value.trim();
+  if (!text) return;
+  $("vendorText").value = "";
+  try { await api(`/api/cases/${selected}/vendor`, { text }); } catch (err) { show(err); }
+};
+$("vendorForm").onclick = async (e) => {
+  const name = e.target.dataset.letter;
+  if (!name) return;
+  try {
+    const bytes = new Uint8Array(await (await fetch(`/demo/${name}`)).arrayBuffer());
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    await api(`/api/cases/${selected}/vendor`, { file: { name, mediaType: "application/pdf", base64: btoa(binary) } });
   } catch (err) { show(err); }
 };
 

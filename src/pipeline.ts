@@ -30,6 +30,26 @@ export interface Step {
   state: StepState;
 }
 
+export type CrewPhase = "investigating" | "awaiting_vendor" | "examining" | "awaiting_human" | "negotiating" | "closed";
+
+export interface DocumentCheck {
+  name: string;
+  verdict: "consistent" | "inconsistent" | "unreadable";
+  notes: string[];
+}
+
+export interface CrewState {
+  phase: CrewPhase;
+  channel: string;
+  chat: { from: "agent" | "vendor"; text: string; at: string; file?: string }[];
+  documents: DocumentCheck[];
+  // What the vendor said on the trusted line, once known.
+  outcome?: "confirmed" | "denied" | "refused" | "needs_person";
+  verified: boolean;
+  recommendation?: string;
+  offer?: { accepted: boolean; discountPct: number; savings: string; note: string };
+}
+
 export interface Case {
   id: string;
   source: string;
@@ -49,6 +69,9 @@ export interface Case {
   refused: (Claim & { reason: string; at: string })[];
   record?: { payload: unknown; signature: string; chainHash: string };
   decision?: { action: Action; by: string; at: string; signature: string };
+  crew?: CrewState;
+  // Signed additions made after the first record, one per thing the crew found.
+  addenda: { type: string; at: string; data: unknown; signature: string }[];
 }
 
 // The pages a run fetched stay out of the Case, so they never go to the browser.
@@ -174,6 +197,7 @@ export function createEngine(d: {
       evidence: [],
       claims: [],
       refused: [],
+      addenda: [],
     };
     cases.set(c.id, c);
     fetchedPages.set(c.id, []);
@@ -238,9 +262,11 @@ export function createEngine(d: {
         refused: c.refused.map(({ url, reason }) => ({ url, reason })),
         signedAt: new Date().toISOString(),
       };
-      const signature = d.signer.sign(payload);
+      // A frozen copy: the crew adds findings to the case later, and a signed record must never change.
+      const frozen = structuredClone(payload);
+      const signature = d.signer.sign(frozen);
       const event = d.events.append("record_signed", { billId: c.id, data: { verdict: c.verdict, score: c.score, signature } });
-      c.record = { payload, signature, chainHash: event.hash };
+      c.record = { payload: frozen, signature, chainHash: event.hash };
       c.status = "done";
       step(c, "Signed", `Ed25519 signature added. Chain hash ${event.hash.slice(0, 12)}.`, "ok");
       if (c.verdict !== "PASS") d.onFlag?.(c);
@@ -262,6 +288,7 @@ export function createEngine(d: {
     const at = new Date().toISOString();
     const signature = d.signer.sign({ caseId: id, action, by, at, record: c.record?.signature });
     c.decision = { action, by, at, signature };
+    if (c.crew) c.crew.phase = "closed";
     d.events.append("decision_signed", { billId: id, data: { action, by, signature } });
     step(c, "Human decision", `${action.toUpperCase()} by ${by}.`, action === "reject" ? "bad" : "ok");
     return c;
@@ -277,10 +304,25 @@ export function createEngine(d: {
     return c;
   }
 
+  // A later finding gets its own signature and points back at the first record.
+  function addendum(c: Case, type: string, data: unknown) {
+    const at = new Date().toISOString();
+    const signature = d.signer.sign({ caseId: c.id, type, data, at, record: c.record?.signature });
+    c.addenda.push({ type, at, data, signature });
+    d.events.append("addendum_signed", { billId: c.id, data: { type, signature } });
+    publish(c);
+  }
+
   return {
     run,
     decide,
     forge,
+    step,
+    publish,
+    addendum,
+    submitClaims,
+    pagesOf: (id: string) => fetchedPages.get(id) ?? [],
+    addPage: (id: string, page: Page) => void fetchedPages.set(id, [...(fetchedPages.get(id) ?? []), page]),
     get: (id: string) => cases.get(id),
     list: () => [...cases.values()].reverse(),
     subscribe(fn: (c: Case) => void) {
