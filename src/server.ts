@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEMO_BILLS } from "./demo-bills.ts";
+import { runEval } from "./eval.ts";
 import { createEventLog } from "./eventlog.ts";
 import { startImessage } from "./imessage.ts";
 import { createEngine, summary, type Action, type Case } from "./pipeline.ts";
@@ -110,6 +111,7 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "GET" && path === "/api/status") return send(res, 200, status());
     if (req.method === "GET" && path === "/api/demo") return send(res, 200, DEMO_BILLS);
+    if (req.method === "GET" && path === "/api/eval") return send(res, 200, runEval());
     if (req.method === "GET" && path === "/api/vendors") return send(res, 200, vendors.map(({ name, domains, phone }) => ({ name, domains, phone })));
     if (req.method === "GET" && path === "/api/cases") return send(res, 200, engine.list());
     if (req.method === "GET" && path === "/api/stream") return stream(req, res);

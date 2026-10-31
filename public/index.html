@@ -43,7 +43,8 @@ textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); ou
 .chip { font: 500 11px var(--mono); padding: 2px 6px; border: 1px solid currentColor; }
 .PASS { color: var(--pass); } .HOLD { color: var(--hold); } .BLOCK { color: var(--block); } .WAIT { color: var(--soft); }
 .steps { list-style: none; margin: 0; padding: 0; }
-.steps li { position: relative; padding: 0 0 14px 22px; animation: rise .22s ease-out both; }
+.steps li { position: relative; padding: 0 0 14px 22px; }
+.steps li.new { animation: rise .22s ease-out both; }
 .steps li::before { content: ""; position: absolute; left: 3px; top: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--soft); }
 .steps li::after { content: ""; position: absolute; left: 7px; top: 18px; bottom: -6px; width: 1px; background: var(--line); }
 .steps li:last-child::after { display: none; }
@@ -54,7 +55,8 @@ textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); ou
 @keyframes rise { from { opacity: 0; transform: translateY(5px); } }
 .empty { color: var(--soft); padding: 28px 0; }
 .stampline { display: flex; align-items: center; gap: 22px; min-height: 92px; }
-.stamp { font: 700 38px/1 var(--serif); letter-spacing: .04em; border: 4px double currentColor; padding: 10px 16px 8px; transform: rotate(-5deg); animation: stamp .24s cubic-bezier(.2, 1.4, .4, 1) both; }
+.stamp { font: 700 38px/1 var(--serif); letter-spacing: .04em; border: 4px double currentColor; padding: 10px 16px 8px; transform: rotate(-5deg); }
+.stamp.fresh { animation: stamp .24s cubic-bezier(.2, 1.4, .4, 1) both; }
 @keyframes stamp { from { opacity: 0; transform: rotate(-5deg) scale(1.5); } }
 .who-big { min-width: 0; overflow-wrap: anywhere; }
 .who-big b { display: block; font: 700 21px/1.2 var(--serif); }
@@ -91,6 +93,7 @@ textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ink); ou
     <textarea id="paste" aria-label="Paste a vendor email or invoice" placeholder="Or paste a vendor email here, with its From line"></textarea>
     <button class="go" id="go">Check this bill</button>
     <p class="err" id="err" role="alert"></p>
+    <p class="note" id="eval"></p>
     <h2>Checked</h2>
     <div id="past"><p class="note">Nothing yet.</p></div>
   </section>
@@ -139,9 +142,15 @@ function renderPast() {
   }).join("");
 }
 
+// Each render rebuilds the list, so remember what is on screen and animate only what is new.
+const shown = { id: null, steps: 0, stamped: null };
+
 function renderLive(c) {
   if (!c) return;
-  $("live").innerHTML = `<ol class="steps">${c.steps.map((s) => `<li class="${esc(s.state)}"><b>${esc(s.label)}</b><time>${clock(s.at)}</time><p>${esc(s.detail)}</p></li>`).join("")}</ol>`;
+  const seen = shown.id === c.id ? shown.steps : 0;
+  $("live").innerHTML = `<ol class="steps">${c.steps.map((s, i) => `<li class="${esc(s.state)} ${i >= seen ? "new" : ""}"><b>${esc(s.label)}</b><time>${clock(s.at)}</time><p>${esc(s.detail)}</p></li>`).join("")}</ol>`;
+  shown.id = c.id;
+  shown.steps = c.steps.length;
 }
 
 function evidenceHtml(c) {
@@ -169,9 +178,11 @@ function renderRecord(c) {
   const decided = c.decision ? `<p class="note">Decision: <b>${esc(c.decision.action.toUpperCase())}</b> by ${esc(c.decision.by)} at ${clock(c.decision.at)}. Signed.</p>` : "";
   const options = c.verdict === "HOLD" ? ["approve", "reject"] : c.verdict === "BLOCK" ? ["reject", "override"] : [];
   const buttons = c.decision ? "" : options.map((a) => `<button data-act="${a}">${a[0].toUpperCase() + a.slice(1)}</button>`).join("");
+  const fresh = shown.stamped === c.id ? "" : "fresh";
+  shown.stamped = c.id;
   $("record").innerHTML = `
     <div class="stampline">
-      <div class="stamp ${c.verdict}">${c.verdict}</div>
+      <div class="stamp ${c.verdict} ${fresh}">${c.verdict}</div>
       <div class="who-big"><b>${esc(c.vendor?.name || c.bill?.vendorName || "Unknown vendor")}</b><span class="note">${c.bill?.amount ? "$" + esc(c.bill.amount) : ""} ${c.vendor ? `Trusted phone ${esc(c.vendor.phone)}` : ""}</span></div>
     </div>
     <div class="meter" role="img" aria-label="Score ${c.score}"><i style="width:${pct}%"></i></div>
@@ -197,6 +208,7 @@ function upsert(c) {
   }
   if (!selected) selected = c.id;
   render();
+  if (c.status !== "running") lights().catch(() => {});
 }
 
 $("go").onclick = () => submit($("paste").value);
@@ -232,6 +244,8 @@ async function start() {
   if (!cases.has(selected)) selected = [...cases.keys()].at(-1) ?? null;
   render();
   lights();
+  const e = await api("/api/eval");
+  $("eval").textContent = `Rules test: caught ${e.caught} of ${e.fraud} fraud bills, ${e.falseAlarms} false alarms on ${e.clean} clean bills. We wrote these ${e.fraud + e.clean} bills ourselves.`;
   const stream = new EventSource("/api/stream");
   stream.addEventListener("case", (e) => upsert(JSON.parse(e.data)));
   // Traffic from an open board keeps a free Render instance awake during the demo.

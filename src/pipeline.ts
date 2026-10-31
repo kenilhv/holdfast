@@ -132,7 +132,7 @@ export function createEngine(d: {
     }
     const page = await fetchPage(url);
     c.evidence.push({ url: page.url, fetchedAt: page.fetchedAt, contentHash: page.contentHash });
-    step(c, vendor ? "Fetched official page" : "Fetched top search result", `${page.url} (${page.phones.length} phone numbers found)`, vendor ? "ok" : "info");
+    step(c, vendor ? "Fetched official page" : "Fetched top search result", `${page.url} (${page.phones.length} phone number${page.phones.length === 1 ? "" : "s"} found)`, vendor ? "ok" : "info");
     return [page];
   }
 
