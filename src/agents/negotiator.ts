@@ -1,13 +1,14 @@
 // Negotiator: asks a verified vendor for better terms. A person has to start it, the limits are in code,
 // and it can never agree to anything: whatever comes back still needs a co-sign.
 import type { Case } from "../pipeline.ts";
+import { invoiceLabel } from "./liaison.ts";
 import { runAgent, schema, text } from "./loop.ts";
 
 export const DISCOUNT_PCT = 2;
 export const EARLY_DAYS = 10;
 
 export const opening = (c: Case) =>
-  `Thanks for confirming. One more question on ${c.bill?.invoiceNumber || "this invoice"}: if we paid within ${EARLY_DAYS} days, would you take ${DISCOUNT_PCT}% off?`;
+  `Thanks for confirming. One more question on ${invoiceLabel(c)}: if we paid within ${EARLY_DAYS} days, would you take ${DISCOUNT_PCT}% off?`;
 
 export function savings(amount: string, pct: number): string {
   const total = Number(amount.replace(/[^0-9.]/g, ""));

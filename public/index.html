@@ -296,7 +296,7 @@ dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 12px 0
 <dialog id="keyDialog">
   <form method="dialog">
     <h3>Operator key</h3>
-    <p>Approving or overriding moves money, so it needs the key.</p>
+    <p>Letting money move, or speaking as the vendor, needs the key.</p>
     <input id="keyInput" type="password" aria-label="Operator key" autocomplete="off">
     <menu>
       <button class="quiet-btn" value="cancel" formnovalidate>Cancel</button>
@@ -580,7 +580,7 @@ function crewRows(c) {
   const liaisonEnd = last(c, "Liaison finished");
   const waitingVendor = k?.phase === "awaiting_vendor";
   const liaisonDone = liaisonEnd || last(c, "Examiner") || k?.phase === "awaiting_human" && !noContact && k.chat.length;
-  rows.push({ name: "Liaison", kind: "Claude", state: noContact ? "off" : liaisonDone ? "done" : waitingVendor ? "wait" : passed ? "off" : "", text: noContact ? "No trusted contact on file" : liaisonEnd ? liaisonEnd.detail.split(": ").slice(1).join(": ") : liaisonDone ? "Got the vendor's reply" : waitingVendor ? "Waiting on the vendor" : none || "Contacts the vendor on the trusted line" });
+  rows.push({ name: "Liaison", kind: "Claude", state: noContact ? "off" : waitingVendor ? "wait" : liaisonDone ? "done" : passed ? "off" : "", text: noContact ? "No trusted contact on file" : waitingVendor ? "Waiting on the vendor" : liaisonEnd ? liaisonEnd.detail.split(": ").slice(1).join(": ") : liaisonDone ? "Got the vendor's reply" : none || "Contacts the vendor on the trusted line" });
 
   const examNow = last(c, "Examiner"), examEnd = last(c, "Examiner finished"), doc = k?.documents.at(-1);
   rows.push({ name: "Examiner", kind: "Claude", state: examEnd ? (doc?.verdict === "consistent" ? "done" : "bad") : k?.phase === "examining" ? "run" : passed ? "off" : "off", text: examEnd ? `${doc?.name[0].toUpperCase()}${doc?.name.slice(1)}: ${doc?.verdict}` : k?.phase === "examining" ? `Reading ${examNow?.detail.replace("Reading ", "").replace(/\.$/, "")}` : none || "Reads what the vendor sends" });
@@ -652,8 +652,11 @@ function upsert(c) {
   if (followNext && isNew) {
     selected = c.id;
     followNext = false;
-  } else if (!followNext && (!selected || (isNew && cases.get(selected)?.status !== "running"))) {
-    selected = c.id;
+  } else if (!followNext) {
+    // A new bill from elsewhere only takes over the screen if this one has nothing happening on it.
+    const now = cases.get(selected);
+    const busy = now?.status === "running" || ["investigating", "examining"].includes(now?.crew?.phase);
+    if (!selected || (isNew && !busy)) selected = c.id;
   }
   render();
   if (c.status !== "running") lights().catch(() => {});

@@ -54,7 +54,7 @@ const BODY_LIMIT = 256 * 1024;
 const FILE_BODY_LIMIT = 8 * 1024 * 1024;
 const TEXT_LIMIT = 30_000;
 const CHECKS_PER_HOUR = Number(process.env.MAX_CHECKS_PER_HOUR ?? 60);
-const CHECKS_PER_CLIENT = 10;
+const CHECKS_PER_CLIENT = Number(process.env.MAX_CHECKS_PER_CLIENT ?? 20);
 const DEMO_CHECKS_PER_HOUR = 60;
 const HOUR = 3_600_000;
 const DECIDE_KEY = process.env.DECIDE_KEY ?? "";
@@ -183,6 +183,8 @@ const server = createServer(async (req, res) => {
       if (req.method === "POST" && part === "vendor") {
         // The stand-in for a vendor's phone. It is closed when a real phone is set.
         if (process.env.DEMO_VENDOR_PHONE && chat?.on) throw new HttpError(409, "the vendor is on a real phone for this demo");
+        // Speaking as the vendor feeds a report a person relies on, so it takes the operator key.
+        if (!DECIDE_KEY || req.headers["x-decide-key"] !== DECIDE_KEY) throw new HttpError(403, "this needs the operator key");
         const { text, file } = await readJson(req, FILE_BODY_LIMIT);
         spendCheck(clientOf(req), true);
         const message = file ? { file: { name: String(file.name).slice(0, 80), mediaType: String(file.mediaType), base64: String(file.base64) } } : { text: String(text ?? "").slice(0, 2000) };
@@ -233,7 +235,7 @@ server.listen(port, () => {
   if (process.env.FIRECRAWL_API_KEY) {
     for (const v of vendors) fetchPage(v.contactUrl).catch((e: Error) => console.error(`warm ${v.id}: ${e.message}`));
   }
-  startImessage({ engine, baseUrl, spend: (who) => spendCheck(`imessage:${who}`), crew: () => crew })
+  startImessage({ engine, baseUrl, spend: (who, question) => spendCheck(`imessage:${who}`, question), crew: () => crew })
     .then((c) => (chat = c))
     .catch((e: Error) => console.error(`iMessage failed to start: ${e.message}`));
   // Render's free tier sleeps after 15 quiet minutes, and a sleeping agent loses texts, so the service calls itself.

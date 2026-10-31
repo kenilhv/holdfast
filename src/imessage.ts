@@ -63,7 +63,7 @@ export async function withTyping(space: any, work: () => Promise<void>) {
   }
 }
 
-export async function startImessage(d: { engine: Engine; baseUrl: string; spend: (who: string) => void; crew: () => Crew | undefined }) {
+export async function startImessage(d: { engine: Engine; baseUrl: string; spend: (who: string, question?: boolean) => void; crew: () => Crew | undefined }) {
   const off = { on: false, notify: async (_text: string, _caseId?: string) => {}, sendVendor: async (_text: string) => {} };
   const projectId = process.env.SPECTRUM_PROJECT_ID;
   const projectSecret = process.env.SPECTRUM_PROJECT_SECRET;
@@ -79,8 +79,11 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
   // The flagged bills waiting on each conversation. A conversation can only reach its own bills,
   // and flagged bills from the board go only to CONTROLLER_PHONE, so a stranger can never decide someone else's.
   const openCases = new Map<string, string[]>();
+  // The last bill each conversation touched, so a question always has something to refer to.
+  const lastCase = new Map<string, string>();
   const caseSpace = new Map<string, any>();
   const vendorPhone = phoneDigits(process.env.DEMO_VENDOR_PHONE ?? "");
+  const controllerPhone = phoneDigits(process.env.CONTROLLER_PHONE ?? "");
   let controller: any;
   let vendorSpace: any;
 
@@ -118,12 +121,17 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
       const c = await d.engine.run(doc, "iMessage");
       console.log(`iMessage: ${c.id} ${c.status} ${c.verdict ?? c.error}`);
       caseSpace.set(c.id, space);
+      lastCase.set(String(space.id), c.id);
       if (c.status === "done" && c.verdict !== "PASS") addOpen(String(space.id), c.id);
       await space.send(summary(c, d.baseUrl));
     });
   }
 
   async function decide(space: any, who: string, action: Command, code?: string) {
+    // Anyone can stop a payment. Only the controller can let one through.
+    if (action !== "reject" && !(controllerPhone && phoneDigits(who) === controllerPhone)) {
+      return space.send("Only the controller can approve, override or negotiate. Anyone can reply REJECT.");
+    }
     const open = waiting(String(space.id));
     if (!open.length) return space.send("There is no bill waiting for a decision here.");
     const id = code ? open.find((c) => billCode(c) === code) : open.length === 1 ? open[0] : undefined;
@@ -181,20 +189,30 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
     if (command) return void (await decide(space, who, command.action, command.code));
     if (text.length >= 30 && LOOKS_LIKE_A_BILL.test(text) && text.includes("\n")) return check(space, who, { kind: "text", text });
 
-    // A question about the bill in this conversation goes to the Controller.
-    const open = waiting(String(space.id)).at(-1);
-    if (open && d.crew()) {
-      try {
-        d.spend(who);
-        return void (await withTyping(space, async () => {
-          await space.send(await d.crew()!.ask(d.engine.get(open)!, text));
-        }));
-      } catch (e) {
-        console.error(`iMessage question: ${(e as Error).message}`);
-      }
-    }
+    // One line of text in a conversation with a bill is a question about that bill, not a new bill.
+    const key = String(space.id);
+    const open = waiting(key);
+    const about = open.at(-1) ?? lastCase.get(key);
+    if (about && d.crew()) return void (await question(space, who, about, open.length > 1, text));
     if (text.length >= 30 && LOOKS_LIKE_A_BILL.test(text)) return check(space, who, { kind: "text", text });
     await space.send(HELP);
+  }
+
+  async function question(space: any, who: string, id: string, several: boolean, text: string) {
+    try {
+      d.spend(who, true);
+    } catch {
+      return space.send("You have reached the hourly limit for questions. Try again later.");
+    }
+    await withTyping(space, async () => {
+      try {
+        const reply = await d.crew()!.ask(d.engine.get(id)!, text);
+        await space.send(several ? `Bill ${billCode(id)}, ${vendorOf(id)}: ${reply}` : reply);
+      } catch (e) {
+        console.error(`iMessage question: ${(e as Error).message}`);
+        await space.send("I could not answer that right now. The bill itself is unchanged.");
+      }
+    });
   }
 
   void (async () => {
@@ -211,7 +229,10 @@ export async function startImessage(d: { engine: Engine; baseUrl: string; spend:
     async notify(text: string, caseId?: string) {
       const space = (caseId && caseSpace.get(caseId)) || (await controllerSpace());
       if (!space) return;
-      if (caseId) addOpen(String(space.id), caseId);
+      if (caseId) {
+        addOpen(String(space.id), caseId);
+        lastCase.set(String(space.id), caseId);
+      }
       await space.send(text);
     },
     async sendVendor(text: string) {

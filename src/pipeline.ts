@@ -43,7 +43,9 @@ export interface CrewState {
   channel: string;
   chat: { from: "agent" | "vendor"; text: string; at: string; file?: string }[];
   documents: DocumentCheck[];
-  // What the vendor said on the trusted line, once known.
+  // What the first message asked for. A bare yes does not satisfy a request for a document.
+  needs?: "document" | "confirmation";
+  // What the vendor said, once known.
   outcome?: "confirmed" | "denied" | "refused" | "needs_person";
   verified: boolean;
   recommendation?: string;

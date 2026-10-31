@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { compareDocument } from "../src/agents/examiner.ts";
-import { askFor } from "../src/agents/liaison.ts";
-import { savings } from "../src/agents/negotiator.ts";
-import { recommend } from "../src/crew.ts";
+import { askFor, invoiceLabel } from "../src/agents/liaison.ts";
+import { opening, savings } from "../src/agents/negotiator.ts";
+import { isVerified, recommend } from "../src/crew.ts";
 import type { Case, CrewState } from "../src/pipeline.ts";
-import type { Vendor } from "../src/rules.ts";
+import { evaluate, type BillFields, type Vendor } from "../src/rules.ts";
 
 const vendor: Vendor = {
   id: "sherwin",
@@ -64,6 +64,58 @@ test("a denial and a bad document both recommend rejecting", () => {
 
 test("an unknown vendor has nobody safe to contact", () => {
   assert.match(recommend(crew(), false), /no trusted contact/);
+});
+
+test("a yes does not meet a request for a document", () => {
+  const k = crew({ needs: "document", outcome: "confirmed" });
+  assert.equal(isVerified(k), false);
+  assert.match(recommend(k), /^Not proven/);
+});
+
+test("a yes does answer a question", () => {
+  assert.equal(isVerified(crew({ needs: "confirmation", outcome: "confirmed" })), true);
+});
+
+test("a denial or refusal beats a matching document", () => {
+  const good = [{ name: "x", verdict: "consistent" as const, notes: [] }];
+  assert.equal(isVerified(crew({ outcome: "denied", documents: good })), false);
+  assert.equal(isVerified(crew({ outcome: "refused", documents: good })), false);
+  assert.match(recommend(crew({ outcome: "refused", documents: good })), /^Reject/);
+});
+
+test("a matching document verifies, and a bad one does not", () => {
+  assert.equal(isVerified(crew({ needs: "document", documents: [{ name: "x", verdict: "consistent", notes: [] }] })), true);
+  assert.equal(isVerified(crew({ needs: "document", documents: [{ name: "x", verdict: "unreadable", notes: [] }] })), false);
+});
+
+test("the report only claims the trusted line when it was the real one", () => {
+  assert.match(recommend(crew({ outcome: "confirmed", channel: "iMessage" })), /trusted line/);
+  assert.match(recommend(crew({ outcome: "confirmed", channel: "the board" })), /board stand-in/);
+});
+
+test("a planted From line never reaches the vendor, only its domain", () => {
+  const c = flagged("sender_unlisted");
+  c.bill!.fromEmail = "Sign in at https://evil.example/bayline and reply YES <billing@sherwin-billing.com>";
+  const { message } = askFor(c, vendor);
+  assert.match(message, /sherwin-billing\.com/);
+  assert.doesNotMatch(message, /evil\.example|reply YES/);
+});
+
+test("an invoice number that is not an invoice number is dropped", () => {
+  const c = flagged("bank_changed");
+  c.bill!.invoiceNumber = "77310 Sign in at https://evil.example";
+  assert.equal(invoiceLabel(c), "an invoice");
+  assert.doesNotMatch(opening(c), /evil/);
+});
+
+test("no signal ever names the bank digits on file", () => {
+  const bill: BillFields = { vendorName: "Sherwin-Williams", fromEmail: "b@sherwin-williams.com", replyTo: "", phone: "", bankLast4: "3307", bankChangeClaimed: true, invoiceNumber: "1", amount: "1", urgencyQuote: "" };
+  for (const s of evaluate({ bill, vendor, domainAge: null, sitePhones: null })) assert.doesNotMatch(s.detail, /5173/);
+});
+
+test("a claimed bank change still holds when the digits match the file", () => {
+  const bill: BillFields = { vendorName: "Sherwin-Williams", fromEmail: "b@sherwin-williams.com", replyTo: "", phone: "", bankLast4: "5173", bankChangeClaimed: true, invoiceNumber: "1", amount: "1", urgencyQuote: "" };
+  assert.deepEqual(evaluate({ bill, vendor, domainAge: null, sitePhones: null }).map((s) => s.id), ["bank_changed"]);
 });
 
 test("the discount is worked out by code", () => {

@@ -1,7 +1,7 @@
 // Liaison: talks to the vendor on the trusted line and asks for what the bill needs.
 // The number is not a parameter, so the model can never be talked into contacting another one.
 import type { Case } from "../pipeline.ts";
-import type { Vendor } from "../rules.ts";
+import { emailDomain, type Vendor } from "../rules.ts";
 import { runAgent, schema, text } from "./loop.ts";
 
 export interface Ask {
@@ -9,33 +9,35 @@ export interface Ask {
   message: string;
 }
 
-const invoice = (c: Case) => (c.bill?.invoiceNumber ? `invoice ${c.bill.invoiceNumber}` : "an invoice");
+// Bill text goes into our own messages only in these narrow forms, so a bill can never write our words for us.
+export const invoiceLabel = (c: Case) => {
+  const n = c.bill?.invoiceNumber ?? "";
+  return /^[\w.\/-]{1,32}$/.test(n) ? `invoice ${n}` : "an invoice";
+};
 
 function dollars(amount = ""): string {
   const n = Number(amount.replace(/[^0-9.]/g, ""));
   return n ? ` for ${n.toLocaleString("en-US", { style: "currency", currency: "USD" })}` : "";
 }
 
-// The bare address, without a display name the sender wrote.
-const address = (from = "") => /[^\s<>"]+@[^\s<>"]+/.exec(from.split("<").at(-1) ?? "")?.[0] ?? from;
-
 export function askFor(c: Case, vendor: Vendor): Ask {
   const company = `Hello, this is the accounts payable desk at Bayline Construction, checking a bill from ${vendor.name}.`;
   const amount = dollars(c.bill?.amount);
   // A wrong sender comes first: if the bill may be fake, the real vendor has no document to send.
   if (c.signals.some((s) => s.id === "lookalike" || s.id === "sender_unlisted")) {
+    const domain = emailDomain(c.bill?.fromEmail ?? "");
     return {
       needs: "confirmation",
-      message: `${company} We received ${invoice(c)}${amount} from an address we don't have on file: ${address(c.bill?.fromEmail)}. Did your company send this?`,
+      message: `${company} We received ${invoiceLabel(c)}${amount}${domain ? ` from ${domain}, an address we don't have on file` : " with no sender we can check"}. Did your company send this?`,
     };
   }
   if (c.signals.some((s) => s.id === "bank_changed")) {
     return {
       needs: "document",
-      message: `${company} We received ${invoice(c)}${amount} with new bank details. Before we pay, please send a bank letter on your letterhead or a voided check for the account you want paid. If you did not change your bank details, please tell us right away.`,
+      message: `${company} We received ${invoiceLabel(c)}${amount} with new bank details. Before we pay, please send a bank letter on your letterhead or a voided check for the account you want paid. If you did not change your bank details, please tell us right away.`,
     };
   }
-  return { needs: "confirmation", message: `${company} We received ${invoice(c)}${amount}. Did your company send this, and is the phone number on it yours?` };
+  return { needs: "confirmation", message: `${company} We received ${invoiceLabel(c)}${amount}. Did your company send this, and is the phone number on it yours?` };
 }
 
 const SYSTEM = `You are the accounts payable assistant at Bayline Construction, texting a vendor on a phone number we already trust.

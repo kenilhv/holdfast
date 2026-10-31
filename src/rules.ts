@@ -196,9 +196,10 @@ export function evaluate({ bill, vendor, domainAge, sitePhones, senderUnproven }
   }
 
   if (vendor && bill.bankLast4 && bill.bankLast4 !== vendor.bankLast4) {
-    out.push(signal("bank_changed", "Bank changed", `Bill pays account ending ${bill.bankLast4}. On file: ${vendor.bankLast4}.`));
-  } else if (vendor && !bill.bankLast4 && bill.bankChangeClaimed) {
-    out.push(signal("bank_changed", "Bank change claimed", "The bill says the bank details changed but gives no account digits to compare."));
+    // Never name the digits on file: anyone can read a signal, and knowing them would unlock a PASS.
+    out.push(signal("bank_changed", "Bank changed", `Bill pays account ending ${bill.bankLast4}, not the account on file.`));
+  } else if (vendor && bill.bankChangeClaimed) {
+    out.push(signal("bank_changed", "Bank change claimed", "The bill says the bank details changed, so the account has to be proven."));
   }
 
   if (vendor && bill.phone) {

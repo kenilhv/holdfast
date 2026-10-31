@@ -1,5 +1,6 @@
 // Investigator: looks for outside evidence on a flagged bill. It can read the web and nothing else.
 import type { Case, Engine } from "../pipeline.ts";
+import { emailDomain } from "../rules.ts";
 import { domainAge, fetchPage, searchWeb, type Claim } from "../web.ts";
 import { runAgent, schema, text } from "./loop.ts";
 
@@ -15,7 +16,7 @@ export async function investigate(engine: Engine, c: Case) {
   await runAgent({
     name: "Investigator",
     system: SYSTEM,
-    prompt: `Vendor named on the bill: ${c.bill?.vendorName || "not stated"}\nSender: ${c.bill?.fromEmail || "not stated"}\nWhy it was flagged: ${reasons}`,
+    prompt: `Vendor named on the bill: ${c.bill?.vendorName || "not stated"}\nSender domain: ${emailDomain(c.bill?.fromEmail ?? "") || "not stated"}\nWhy it was flagged: ${reasons}`,
     maxTurns: 6,
     onCall(tool, input) {
       if (tool !== "report") engine.step(c, "Investigator", `${tool}: ${input.query ?? input.url ?? input.domain}`);
